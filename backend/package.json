@@ -2,7 +2,10 @@
   "name": "backend",
   "version": "1.0.0",
   "main": "index.js",
+<<<<<<< HEAD
   "type": "module",
+=======
+>>>>>>> 2b90f146ae77632134381d6369473229daa13d2d
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -16,7 +19,12 @@
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
+<<<<<<< HEAD
     "mysql2": "^3.14.2",
     "router": "^2.2.0"
+=======
+    "mysql2": "^3.14.3",
+    "nodemon": "^3.1.10"
+>>>>>>> 2b90f146ae77632134381d6369473229daa13d2d
   }
 }
