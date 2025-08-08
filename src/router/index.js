@@ -1,27 +1,48 @@
-import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import { createRouter, createWebHistory } from 'vue-router';
+import Login from '../components/LoginComp.vue';
+import Signup from '../components/Signup.vue';
+import AdminDashboard from '../components/AdminDashboard.vue';
+import ClientHome from '../components/ClientHome.vue';
+import ContractorHome from '../components/ContractorHome.vue';
 
 const routes = [
-  {
-    path: '/',
-    name: 'home',
-    component: HomeView
+  { path: '/', component: Login },
+  { path: '/signup', component: Signup },
+  { 
+    path: '/admin/dashboard', 
+    component: AdminDashboard, 
+    meta: { requiresAuth: true, role: 'admin' }
   },
-  {
-    path: '/about',
-    name: 'about',
-    // route level code-splitting
-    // this generates a separate chunk (about.[hash].js) for this route
-    // which is lazy-loaded when the route is visited.
-    component: function () {
-      return import(/* webpackChunkName: "about" */ '../views/AboutView.vue')
-    }
+  { 
+    path: '/client/home', 
+    component: ClientHome, 
+    meta: { requiresAuth: true, role: 'client' }
+  },
+  { 
+    path: '/contractor/home', 
+    component: ContractorHome, 
+    meta: { requiresAuth: true, role: 'contractor' }
   }
-]
+];
 
 const router = createRouter({
-  history: createWebHistory(process.env.BASE_URL),
+  history: createWebHistory(),
   routes
-})
+});
 
-export default router
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('token');
+  const role = localStorage.getItem('role');
+
+  if (to.meta.requiresAuth && !token) {
+    return next('/');
+  }
+
+  if (to.meta.role && to.meta.role !== role) {
+    return next('/');
+  }
+
+  next();
+});
+
+export default router;
