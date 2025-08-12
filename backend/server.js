@@ -14,7 +14,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 
 
-// Protected route example
+// Protected route example                                                                          
 app.get('/api/protected', authMiddleware(['admin']), (req, res) => {
   res.json({ message: 'Protected content' });
 });

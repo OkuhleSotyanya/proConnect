@@ -1,0 +1,3 @@
+<template>
+    <h1>Client Home</h1>
+</template>

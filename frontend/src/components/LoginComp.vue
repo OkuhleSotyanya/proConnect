@@ -1,65 +1,32 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-100">
-    <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
-      <h2 class="text-2xl font-bold mb-6 text-center">Login to ProConnect</h2>
-      <form @submit.prevent="handleLogin">
-        <div class="mb-4">
-          <label class="block text-gray-700 mb-2" for="email">Email</label>
-          <input
-            v-model="email"
-            type="email"
-            id="email"
-            class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-        <div class="mb-4">
-          <label class="block text-gray-700 mb-2" for="password">Password</label>
-          <input
-            v-model="password"
-            type="password"
-            id="password"
-            class="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-        <div class="mb-6">
-          <label class="block text-gray-700 mb-2">Select Role</label>
-          <div class="flex space-x-4">
-            <button
-              type="button"
-              :class="[
-                'flex-1 p-3 rounded-lg',
-                role === 'client' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'
-              ]"
-              @click="role = 'client'"
-            >
-              Client
-            </button>
-            <button
-              type="button"
-              :class="[
-                'flex-1 p-3 rounded-lg',
-                role === 'contractor' ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700'
-              ]"
-              @click="role = 'contractor'"
-            >
-              Contractor
-            </button>
+  <div class="centered-wrapper">
+    <div class="col-md-6 col-lg-4">
+      <div class="card shadow-sm p-4">
+        <h2 class="card-title text-center mb-4">Login to ProConnect</h2>
+        <form @submit.prevent="handleLogin">
+          <div class="mb-3">
+            <label for="email" class="form-label">Email</label>
+            <input v-model="email" type="email" id="email" class="form-control" required />
           </div>
-        </div>
-        <button
-          type="submit"
-          class="w-full bg-blue-500 text-white p-3 rounded-lg hover:bg-blue-600"
-          :disabled="!role"
-        >
-          Login
-        </button>
-        <p v-if="error" class="text-red-500 mt-4 text-center">{{ error }}</p>
-      </form>
-      <p class="mt-4 text-center">
-        Don't have an account? <router-link to="/signup" class="text-blue-500 hover:underline">Sign Up</router-link>
-      </p>
+          <div class="mb-3">
+            <label for="password" class="form-label">Password</label>
+            <input v-model="password" type="password" id="password" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Select Role</label>
+            <div class="d-flex gap-2">
+              <button type="button" :class="['btn flex-fill', role === 'client' ? 'btn-primary' : 'btn-outline-secondary']" @click="role = 'client'">Client</button>
+              <button type="button" :class="['btn flex-fill', role === 'contractor' ? 'btn-primary' : 'btn-outline-secondary']" @click="role = 'contractor'">Contractor</button>
+              <button type="button" :class="['btn flex-fill', role === 'admin' ? 'btn-primary' : 'btn-outline-secondary']" @click="role = 'admin'">Admin</button>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary w-100" :disabled="!role">Login</button>
+          <p v-if="error" class="text-danger mt-3 text-center">{{ error }}</p>
+        </form>
+        <p class="mt-3 text-center">
+          Don't have an account? <router-link to="/signup" class="text-primary">Sign Up</router-link>
+        </p>
+      </div>
     </div>
   </div>
 </template>
@@ -68,6 +35,7 @@
 import axios from 'axios';
 
 export default {
+  name: 'LoginForm',
   data() {
     return {
       email: '',
@@ -85,15 +53,18 @@ export default {
       try {
         const response = await axios.post('http://localhost:3000/api/auth/login', {
           email: this.email,
-          password: this.password,
-          role: this.role
+          password: this.password
         });
-
         localStorage.setItem('token', response.data.token);
-        localStorage.setItem('role', response.data.role);
+        localStorage.setItem('role', response.data.role_name);
 
-        // Redirect based on role
-        switch (response.data.role) {
+        const roleName = response.data.role_name.toLowerCase();
+        if (roleName !== this.role.toLowerCase()) {
+          this.error = `Selected role (${this.role}) does not match user role (${roleName}).`;
+          return;
+        }
+
+        switch (roleName) {
           case 'admin':
             this.$router.push('/admin/dashboard');
             break;
@@ -104,12 +75,36 @@ export default {
             this.$router.push('/contractor/home');
             break;
           default:
-            this.error = 'Invalid role';
+            this.error = 'Invalid role received from server';
         }
-      } catch (err) {
-        this.error = err.response?.data?.message || 'Login failed';
+      } catch (error) {
+        this.error = error.response?.data?.message || 'Login failed. Please try again.';
       }
     }
   }
 };
 </script>
+
+<style scoped>
+.centered-wrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.card {
+  border-radius: 10px;
+}
+.btn-primary {
+  background-color: #007bff;
+  border-color: #007bff;
+}
+.btn-primary:hover {
+  background-color: #0056b3;
+  border-color: #004085;
+}
+.form-control:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+</style>

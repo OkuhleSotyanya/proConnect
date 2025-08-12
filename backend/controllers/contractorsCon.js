@@ -1,4 +1,4 @@
-import { addContractors, deleteContractors, getContractors, getContractorsByID, updateContractorByEmail } from "../model/contractorsDB.js"
+import { addContractors, deleteContractors, getContractors, getContractorsByID, updateContractorByEmail } from "../models/contractorsDB.js"
 
 
 

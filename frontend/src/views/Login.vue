@@ -1,4 +1,4 @@
-//this is the login view
+
 <template>
   <div id="login-view">
     <h1>Login to ProConnect</h1>
@@ -13,4 +13,4 @@
     </form> 
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
   </div>
-</template>
+</template>   
