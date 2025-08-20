@@ -1,4 +1,4 @@
-// jobModel.js
+// models/jobModel.js
 const pool = require('../config/db');
 
 const validStatuses = ['pending', 'accepted', 'rejected', 'in_progress', 'completed', 'cancelled'];
@@ -12,14 +12,15 @@ const JobModel = {
     return rows.length > 0;
   },
 
-  async createJob(clientId, contractorId, serviceType, description, location, jobDate) {
+  // NOTE: Keep this signature; controller now passes parameters in correct order.
+  async createJob(clientId, contractorId, serviceType, description, location, jobDate, amount = 0, hoursToWork = 0) {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
       const [result] = await connection.execute(
-        `INSERT INTO jobs (client_id, contractor_id, service_type, description, location, job_date, status)
-         VALUES (?, ?, ?, ?, ?, ?, 'pending')`,
-        [clientId, contractorId, serviceType, description, location, jobDate]
+        `INSERT INTO job_request (client_id, contractor_id, service_type, description, location, job_date, status, amount, hours_to_work)
+         VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)`,
+        [clientId, contractorId, serviceType, description, location, jobDate, amount, hoursToWork]
       );
       await connection.commit();
       return result.insertId;
@@ -39,8 +40,8 @@ const JobModel = {
     offset = Math.max(0, parseInt(offset));
 
     let query = `
-      SELECT j.*, c.fullname AS client_name, ctr.fullname AS contractor_name
-      FROM jobs j
+      SELECT j.*, c.fullname AS client_name, ctr.full_name AS contractor_name
+      FROM job_request j
       JOIN client_details c ON j.client_id = c.user_id
       JOIN contractor_details ctr ON j.contractor_id = ctr.user_id
       WHERE j.contractor_id = ?
@@ -64,8 +65,8 @@ const JobModel = {
     offset = Math.max(0, parseInt(offset));
 
     let query = `
-      SELECT j.*, c.fullname AS client_name, ctr.fullname AS contractor_name
-      FROM jobs j
+      SELECT j.*, c.fullname AS client_name, ctr.full_name AS contractor_name
+      FROM job_request j
       JOIN client_details c ON j.client_id = c.user_id
       JOIN contractor_details ctr ON j.contractor_id = ctr.user_id
       WHERE j.client_id = ?
@@ -89,8 +90,8 @@ const JobModel = {
     offset = Math.max(0, parseInt(offset));
 
     let query = `
-      SELECT j.*, c.fullname AS client_name, ctr.fullname AS contractor_name
-      FROM jobs j
+      SELECT j.*, c.fullname AS client_name, ctr.full_name AS contractor_name
+      FROM job_request j
       JOIN client_details c ON j.client_id = c.user_id
       JOIN contractor_details ctr ON j.contractor_id = ctr.user_id
       WHERE 1=1
@@ -111,7 +112,7 @@ const JobModel = {
     try {
       await connection.beginTransaction();
       const [result] = await connection.execute(
-        `UPDATE jobs SET status = ? WHERE job_id = ?`,
+        `UPDATE job_request SET status = ? WHERE job_id = ?`,
         [status, jobId]
       );
       await connection.commit();
@@ -126,7 +127,7 @@ const JobModel = {
 
   async getClientIdByJobId(jobId) {
     const [rows] = await pool.execute(
-      `SELECT client_id FROM jobs WHERE job_id = ? LIMIT 1`,
+      `SELECT client_id FROM job_request WHERE job_id = ? LIMIT 1`,
       [jobId]
     );
     return rows.length > 0 ? rows[0].client_id : null;
@@ -134,7 +135,7 @@ const JobModel = {
 
   async getJobById(jobId) {
     const [rows] = await pool.execute(
-      `SELECT * FROM jobs WHERE job_id = ? LIMIT 1`,
+      `SELECT * FROM job_request WHERE job_id = ? LIMIT 1`,
       [jobId]
     );
     return rows[0] || null;

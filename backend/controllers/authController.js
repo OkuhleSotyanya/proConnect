@@ -1,45 +1,97 @@
-// authController.js
+// controllers/authController.js
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const pool = require('../config/db');
 const User = require('../models/authModel');
 
-const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRES_IN = '1h';
-
-// Helper function for password validation
-const validatePassword = (password) => {
-  const minLength = 8;
-  const hasUpperCase = /[A-Z]/.test(password);
-  const hasLowerCase = /[a-z]/.test(password);
-  const hasNumber = /\d/.test(password);
-  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
-
-  if (password.length < minLength) {
-    return 'Password must be at least 8 characters long.';
-  }
-  if (!hasUpperCase) {
-    return 'Password must contain at least one uppercase letter.';
-  }
-  if (!hasLowerCase) {
-    return 'Password must contain at least one lowercase letter.';
-  }
-  if (!hasNumber) {
-    return 'Password must contain at least one number.';
-  }
-  if (!hasSpecialChar) {
-    return 'Password must contain at least one special character.';
-  }
-  return null;
-};
-
 const authController = {
-  signup: async (req, res) => {
+  // User Login
+  async login(req, res) {
+    try {
+      const { email, password } = req.body;
+      const user = await User.findByEmail(email);
+
+      if (!user) {
+        return res.status(401).json({ message: 'Invalid email or password' });
+      }
+
+      const isMatch = await bcrypt.compare(password, user.password_hash);
+      if (!isMatch) {
+        return res.status(401).json({ message: 'Invalid email or password' });
+      }
+
+      const token = jwt.sign(
+        { user_id: user.user_id, email: user.email, role_id: user.role_id },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      res.json({
+        token,
+        user: { user_id: user.user_id, email: user.email, role_id: user.role_id },
+      });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({ message: 'Server error' });
+    }
+  },
+
+  // Register Client
+  async registerClient(req, res) {
+    try {
+      const { email, password, fullname, phone_number, address } = req.body;
+
+      const existingUser = await User.findByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: 'Email already exists' });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const roleId = 2; // Client
+      const userId = await User.createUser(email, hashedPassword, roleId);
+
+      await User.createClientDetails(userId, fullname, phone_number, address);
+
+      const token = jwt.sign(
+        { user_id: userId, email, role_id: roleId },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      res.status(201).json({ token, user: { user_id: userId, email, role_id: roleId } });
+    } catch (error) {
+      console.error('Client registration error:', error);
+      res.status(500).json({ message: 'Server error' });
+    }
+  },
+
+  // Register Contractor
+  async registerContractor(req, res) {
     try {
       const {
         email,
         password,
-        role,
-        fullname,
+        full_name,
+        phone_number,
+        address,
+        card_photo,
+        certification_pdf,
+        hourly_rate,
+        job_experience,
+        description,
+      } = req.body;
+
+      const existingUser = await User.findByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: 'Email already exists' });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const roleId = 3; // Contractor
+      const userId = await User.createUser(email, hashedPassword, roleId);
+
+      await User.createContractorDetails(userId, {
+        full_name,
         phone_number,
         address,
         certification_pdf,
@@ -47,187 +99,154 @@ const authController = {
         hourly_rate,
         job_experience,
         description,
-        work_email
-      } = req.body;
+      });
 
-      if (!email || !password || !role) {
-        return res.status(400).json({ message: 'Email, password, and role are required.' });
+      const token = jwt.sign(
+        { user_id: userId, email, role_id: roleId },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
+
+      res.status(201).json({ token, user: { user_id: userId, email, role_id: roleId } });
+    } catch (error) {
+      console.error('Contractor registration error:', error);
+      res.status(500).json({ message: 'Server error' });
+    }
+  },
+
+  // Register Admin
+  async registerAdmin(req, res) {
+    try {
+      if (!req.user || req.user.role_id !== 1) {
+        return res.status(403).json({ message: 'Only admins can register new admins' });
       }
 
-      // Validate password complexity
-      const passwordError = validatePassword(password);
-      if (passwordError) {
-        return res.status(400).json({ message: passwordError });
-      }
-
-      // Role-specific validation
-      if (role === 'admin' && !work_email) {
-        return res.status(400).json({ message: 'work_email is required for admin.' });
-      }
-      if (role === 'client' && (!fullname || !phone_number || !address)) {
-        return res.status(400).json({ message: 'fullname, phone_number, and address are required for client.' });
-      }
-      if (role === 'contractor' && (!fullname || !phone_number || !address || !certification_pdf || !card_photo || !hourly_rate || !job_experience || !description)) {
-        return res.status(400).json({ message: 'All contractor fields are required.' });
-      }
-      if (role === 'contractor' && (isNaN(hourly_rate) || hourly_rate < 0)) {
-        return res.status(400).json({ message: 'hourly_rate must be a non-negative number.' });
-      }
+      const { email, password, address } = req.body;
 
       const existingUser = await User.findByEmail(email);
       if (existingUser) {
-        return res.status(409).json({ message: 'Email already in use.' });
-      }
-
-      const role_id = await User.findRoleIdByName(role);
-      if (!role_id) {
-        return res.status(400).json({ message: 'Role not found in database.' });
+        return res.status(400).json({ message: 'Email already exists' });
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
-      const newUserId = await User.createUser(email, hashedPassword, role_id);
+      const roleId = 1; // Admin
+      const userId = await User.createUser(email, hashedPassword, roleId);
 
-      // Insert role-specific details
-      if (role === 'admin') {
-        await User.createAdminDetails(newUserId, work_email);
-      } else if (role === 'client') {
-        await User.createClientDetails(newUserId, fullname, phone_number, address);
-      } else if (role === 'contractor') {
-        await User.createContractorDetails(newUserId, fullname, phone_number, address, certification_pdf, card_photo, hourly_rate, job_experience, description);
-      }
-
-      res.status(201).json({ message: 'User created successfully', user_id: newUserId });
-    } catch (error) {
-      console.error('Signup Error:', error);
-      if (error.code === 'ER_DBACCESS_DENIED_ERROR' || error.code === 'ER_ACCESS_DENIED_ERROR') {
-        return res.status(500).json({ message: 'Database connection error' });
-      }
-      res.status(500).json({ message: 'Server error' });
-    }
-  },
-
-  login: async (req, res) => {
-    try {
-      const { email, password } = req.body;
-
-      if (!email || !password) {
-        return res.status(400).json({ message: 'Email and password are required.' });
-      }
-
-      const user = await User.findByEmail(email);
-      if (!user) {
-        return res.status(404).json({ message: 'User not found.' });
-      }
-
-      if (!user.role_name) {
-        return res.status(400).json({ message: 'User role is invalid or missing.' });
-      }
-
-      const isMatch = await bcrypt.compare(password, user.password_hash);
-      if (!isMatch) {
-        return res.status(401).json({ message: 'Invalid password.' });
-      }
-
-      if (!JWT_SECRET) {
-        return res.status(500).json({ message: 'JWT secret is not configured.' });
-      }
+      await User.createAdminDetails(userId, address);
 
       const token = jwt.sign(
-        { user_id: user.user_id, role_name: user.role_name },
-        JWT_SECRET,
-        { expiresIn: JWT_EXPIRES_IN }
+        { user_id: userId, email, role_id: roleId },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
       );
 
-      res.status(200).json({ message: 'Login successful', token, role_name: user.role_name });
+      res.status(201).json({ token, user: { user_id: userId, email, role_id: roleId } });
     } catch (error) {
-      console.error('Login Error:', error);
-      if (error.code === 'ER_DBACCESS_DENIED_ERROR' || error.code === 'ER_ACCESS_DENIED_ERROR') {
-        return res.status(500).json({ message: 'Database connection error' });
-      }
+      console.error('Admin registration error:', error);
       res.status(500).json({ message: 'Server error' });
     }
   },
 
-  getAll: async (req, res) => {
+  // Get User Profile
+  async getUserProfile(req, res) {
     try {
-      const users = await User.getAllUsers();
-      res.status(200).json(users);
-    } catch (error) {
-      console.error('GetAllUsers Error:', error);
-      res.status(500).json({ message: 'Server error' });
-    }
-  },
-
-  getById: async (req, res) => {
-    try {
-      const user = await User.getUserById(req.params.id);
-      if (!user) return res.status(404).json({ message: 'User not found' });
-      res.status(200).json(user);
-    } catch (error) {
-      console.error('GetUserById Error:', error);
-      res.status(500).json({ message: 'Server error' });
-    }
-  },
-
-  update: async (req, res) => {
-    try {
-      const userId = req.params.id;
-      const { email, password, role, ...roleSpecificFields } = req.body;
-
-      const fields = {};
-      if (email) fields.email = email;
-      if (password) {
-        const passwordError = validatePassword(password);
-        if (passwordError) {
-          return res.status(400).json({ message: passwordError });
-        }
-        fields.password_hash = await bcrypt.hash(password, 10);
-      }
-
-      if (Object.keys(fields).length > 0) {
-        const result = await User.updateUser(userId, fields);
-        if (result.affectedRows === 0) {
-          return res.status(404).json({ message: 'User not found or no changes' });
-        }
-      }
-
-      // Update role-specific details if provided
+      const userId = req.user.user_id;
       const user = await User.getUserById(userId);
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      if (user.role_name === 'admin' && Object.keys(roleSpecificFields).length > 0) {
-        await User.updateAdminDetails(userId, roleSpecificFields);
-      } else if (user.role_name === 'client' && Object.keys(roleSpecificFields).length > 0) {
-        await User.updateClientDetails(userId, roleSpecificFields);
-      } else if (user.role_name === 'contractor' && Object.keys(roleSpecificFields).length > 0) {
-        if (roleSpecificFields.hourly_rate && (isNaN(roleSpecificFields.hourly_rate) || roleSpecificFields.hourly_rate < 0)) {
-          return res.status(400).json({ message: 'hourly_rate must be a non-negative number.' });
-        }
-        await User.updateContractorDetails(userId, roleSpecificFields);
+      let details = null;
+      if (user.role_id === 1) {
+        [details] = await pool.query('SELECT * FROM admin_details WHERE user_id = ?', [userId]);
+      } else if (user.role_id === 2) {
+        [details] = await pool.query('SELECT * FROM client_details WHERE user_id = ?', [userId]);
+      } else if (user.role_id === 3) {
+        [details] = await pool.query('SELECT * FROM contractor_details WHERE user_id = ?', [userId]);
       }
 
-      res.status(200).json({ message: 'User updated successfully' });
+      res.json({ user, details: details[0] });
     } catch (error) {
-      console.error('UpdateUser Error:', error);
+      console.error('Get user profile error:', error);
       res.status(500).json({ message: 'Server error' });
     }
   },
 
-  delete: async (req, res) => {
+  // Update User Profile
+  async updateUserProfile(req, res) {
     try {
-      const result = await User.deleteUser(req.params.id);
-      if (result.affectedRows === 0) {
+      const userId = req.user.user_id;
+      const {
+        email,
+        password,
+        full_name,
+        phone_number,
+        address,
+        certification_pdf,
+        card_photo,
+        hourly_rate,
+        job_experience,
+        description,
+      } = req.body;
+
+      // Update users table
+      const userFields = {};
+      if (email) userFields.email = email;
+      if (password) userFields.password_hash = await bcrypt.hash(password, 10);
+
+      if (Object.keys(userFields).length > 0) {
+        await User.updateUser(userId, userFields);
+      }
+
+      // Update role-specific details
+      const user = await User.getUserById(userId);
+      if (user.role_id === 1) {
+        await User.updateAdminDetails(userId, { address });
+      } else if (user.role_id === 2) {
+        await User.updateClientDetails(userId, { full_name, phone_number, address });
+      } else if (user.role_id === 3) {
+        await User.updateContractorDetails(userId, {
+          full_name,
+          phone_number,
+          address,
+          certification_pdf,
+          card_photo,
+          hourly_rate,
+          job_experience,
+          description,
+        });
+      }
+
+      res.json({ message: 'Profile updated successfully' });
+    } catch (error) {
+      console.error('Update user profile error:', error);
+      res.status(500).json({ message: 'Server error' });
+    }
+  },
+
+  // Delete User
+  async deleteUser(req, res) {
+    try {
+      const userId = req.user.user_id;
+
+      const user = await User.getUserById(userId);
+      if (user.role_id === 1 && !req.body.allowAdminDelete) {
+        return res.status(403).json({
+          message: 'Admins cannot delete themselves without explicit permission',
+        });
+      }
+
+      const deleted = await User.deleteUser(userId);
+      if (!deleted) {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      res.status(200).json({ message: 'User deleted successfully' });
+      res.json({ message: 'User deleted successfully' });
     } catch (error) {
-      console.error('DeleteUser Error:', error);
+      console.error('Delete user error:', error);
       res.status(500).json({ message: 'Server error' });
     }
-  }
+  },
 };
 
 module.exports = authController;

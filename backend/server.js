@@ -1,14 +1,18 @@
-// server.js
+
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
+const path = require('path');
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
-
 const authRoutes = require('../backend/routes/authRoutes');
 const jobRoutes = require('../backend/routes/jobRoutes');
 const authMiddleware = require('../backend/middleware/authMiddleware');
-const db = require('./config/db');
+const clientRoutes = require('../backend/routes/clientRoutes');
+const contractorRoutes = require('../backend/routes/contractorRoutes');
+const pool = require('./config/db');
+require('dotenv').config();
+const profileRoutes = require('./routes/profileRoutes');
 
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -34,6 +38,10 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/jobs', jobRoutes);
+app.use('/api/clients', clientRoutes);
+app.use('/api/contractors', contractorRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Protected route example
 app.get('/api/protected', authMiddleware(['admin']), (req, res) => {

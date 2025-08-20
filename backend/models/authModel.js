@@ -1,51 +1,68 @@
-// authModel.js
-const db = require('../config/db');
+// models/authModel.js
+const pool = require('../config/db');
 
 const User = {
-  createUser: async (email, password_hash, role_id) => {
-    const sql = `INSERT INTO users (email, password_hash, role_id) VALUES (?, ?, ?)`;
-    const [result] = await db.query(sql, [email, password_hash, role_id]);
+  async createUser(email, hashedPassword, roleId) {
+    const [result] = await pool.query(
+      'INSERT INTO users (email, password_hash, role_id) VALUES (?, ?, ?)',
+      [email, hashedPassword, roleId]
+    );
     return result.insertId;
   },
 
-  createClientDetails: async (user_id, fullname, phone_number, address) => {
-    const sql = `INSERT INTO client_details (user_id, fullname, phone_number, address) VALUES (?, ?, ?, ?)`;
-    await db.query(sql, [user_id, fullname, phone_number, address]);
-  },
-
-  createContractorDetails: async (user_id, full_name, phone_number, address, certification_pdf, card_photo, hourly_rate, job_experience, description) => {
-    const sql = `INSERT INTO contractor_details (user_id, full_name, phone_number, address, certification_pdf, card_photo, hourly_rate, job_experience, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    await db.query(sql, [user_id, full_name, phone_number, address, certification_pdf, card_photo, hourly_rate, job_experience, description]);
-  },
-
-  createAdminDetails: async (userId, work_email) => {
-    const sql = 'INSERT INTO admin_details (user_id, work_email) VALUES (?, ?)';
-    const [result] = await db.query(sql, [userId, work_email]);
-    return result;
-  },
-
-  getAllUsers: async () => {
-    const sql = `
-      SELECT u.user_id, u.email, r.role_name, u.created_at
-      FROM users u
-      JOIN roles r ON u.role_id = r.role_id
-    `;
-    const [rows] = await db.query(sql);
-    return rows;
-  },
-
-  getUserById: async (user_id) => {
-    const sql = `
-      SELECT u.user_id, u.email, r.role_name, u.created_at
-      FROM users u
-      JOIN roles r ON u.role_id = r.role_id
-      WHERE u.user_id = ?
-    `;
-    const [rows] = await db.query(sql, [user_id]);
+  async findByEmail(email) {
+    const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
     return rows[0];
   },
 
-  updateUser: async (user_id, fields) => {
+  async createClientDetails(userId, fullname, phone_number, address) {
+    const [result] = await pool.query(
+      `INSERT INTO client_details (user_id, fullname, phone_number, address) 
+       VALUES (?, ?, ?, ?)`,
+      [userId, fullname, phone_number, address]
+    );
+    return result.insertId;
+  },
+
+  async createContractorDetails(userId, details) {
+    const {
+      full_name,
+      phone_number,
+      address,
+      certification_pdf,
+      card_photo,
+      hourly_rate,
+      job_experience,
+      description
+    } = details;
+    const [result] = await pool.query(
+      `INSERT INTO contractor_details 
+       (user_id, full_name, phone_number, address, certification_pdf, card_photo, hourly_rate, job_experience, description) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [userId, full_name, phone_number, address, certification_pdf, card_photo, hourly_rate, job_experience, description]
+    );
+    return result.insertId;
+  },
+
+  async createAdminDetails(userId, address) {
+    const [result] = await pool.query(
+      `INSERT INTO admin_details (user_id, address) VALUES (?, ?)`,
+      [userId, address]
+    );
+    return result.insertId;
+  },
+
+  async getAllUsers() {
+    const [rows] = await pool.query('SELECT * FROM users');
+    return rows;
+  },
+
+  async getUserById(userId) {
+    const [rows] = await pool.query('SELECT * FROM users WHERE user_id = ?', [userId]);
+    return rows[0];
+  },
+
+  async updateUser(userId, fields) {
     const updates = [];
     const values = [];
 
@@ -57,136 +74,86 @@ const User = {
       updates.push('password_hash = ?');
       values.push(fields.password_hash);
     }
-
-    if (updates.length === 0) {
-      return { affectedRows: 0 };
+    if (fields.role_id) {
+      updates.push('role_id = ?');
+      values.push(fields.role_id);
     }
 
-    values.push(user_id);
+    if (updates.length === 0) return false;
 
-    const sql = `UPDATE users SET ${updates.join(', ')} WHERE user_id = ?`;
-    const [result] = await db.query(sql, values);
-    return result;
+    values.push(userId);
+
+    const [result] = await pool.query(
+      `UPDATE users SET ${updates.join(', ')} WHERE user_id = ?`,
+      values
+    );
+    return result.affectedRows > 0;
   },
 
-  updateAdminDetails: async (user_id, fields) => {
+  async updateClientDetails(userId, fields) {
     const updates = [];
     const values = [];
 
-    if (fields.work_email) {
-      updates.push('work_email = ?');
-      values.push(fields.work_email);
-    }
+    if (fields.full_name) updates.push('full_name = ?'), values.push(fields.full_name);
+    if (fields.phone_number) updates.push('phone_number = ?'), values.push(fields.phone_number);
+    if (fields.address) updates.push('address = ?'), values.push(fields.address);
 
-    if (updates.length === 0) {
-      throw new Error('No fields to update for admin details');
-    }
+    if (updates.length === 0) return false;
 
-    values.push(user_id);
+    values.push(userId);
 
-    const sql = `UPDATE admin_details SET ${updates.join(', ')} WHERE user_id = ?`;
-    const [result] = await db.query(sql, values);
-    return result;
+    const [result] = await pool.query(
+      `UPDATE client_details SET ${updates.join(', ')} WHERE user_id = ?`,
+      values
+    );
+    return result.affectedRows > 0;
   },
 
-  updateClientDetails: async (user_id, fields) => {
+  async updateContractorDetails(userId, fields) {
     const updates = [];
     const values = [];
 
-    if (fields.fullname) {
-      updates.push('fullname = ?');
-      values.push(fields.fullname);
-    }
-    if (fields.phone_number) {
-      updates.push('phone_number = ?');
-      values.push(fields.phone_number);
-    }
-    if (fields.address) {
-      updates.push('address = ?');
-      values.push(fields.address);
-    }
+    if (fields.full_name) updates.push('full_name = ?'), values.push(fields.full_name);
+    if (fields.phone_number) updates.push('phone_number = ?'), values.push(fields.phone_number);
+    if (fields.address) updates.push('address = ?'), values.push(fields.address);
+    if (fields.certification_pdf) updates.push('certification_pdf = ?'), values.push(fields.certification_pdf);
+    if (fields.card_photo) updates.push('card_photo = ?'), values.push(fields.card_photo);
+    if (fields.hourly_rate) updates.push('hourly_rate = ?'), values.push(fields.hourly_rate);
+    if (fields.job_experience) updates.push('job_experience = ?'), values.push(fields.job_experience);
+    if (fields.description) updates.push('description = ?'), values.push(fields.description);
 
-    if (updates.length === 0) {
-      throw new Error('No fields to update for client details');
-    }
+    if (updates.length === 0) return false;
 
-    values.push(user_id);
+    values.push(userId);
 
-    const sql = `UPDATE client_details SET ${updates.join(', ')} WHERE user_id = ?`;
-    const [result] = await db.query(sql, values);
-    return result;
+    const [result] = await pool.query(
+      `UPDATE contractor_details SET ${updates.join(', ')} WHERE user_id = ?`,
+      values
+    );
+    return result.affectedRows > 0;
   },
 
-  updateContractorDetails: async (user_id, fields) => {
+  async updateAdminDetails(userId, fields) {
     const updates = [];
     const values = [];
 
-    if (fields.full_name) {
-      updates.push('full_name = ?');
-      values.push(fields.full_name);
-    }
-    if (fields.phone_number) {
-      updates.push('phone_number = ?');
-      values.push(fields.phone_number);
-    }
-    if (fields.address) {
-      updates.push('address = ?');
-      values.push(fields.address);
-    }
-    if (fields.certification_pdf) {
-      updates.push('certification_pdf = ?');
-      values.push(fields.certification_pdf);
-    }
-    if (fields.card_photo) {
-      updates.push('card_photo = ?');
-      values.push(fields.card_photo);
-    }
-    if (fields.hourly_rate !== undefined) {
-      updates.push('hourly_rate = ?');
-      values.push(fields.hourly_rate);
-    }
-    if (fields.job_experience) {
-      updates.push('job_experience = ?');
-      values.push(fields.job_experience);
-    }
-    if (fields.description) {
-      updates.push('description = ?');
-      values.push(fields.description);
-    }
+    if (fields.address) updates.push('address = ?'), values.push(fields.address);
 
-    if (updates.length === 0) {
-      throw new Error('No fields to update for contractor details');
-    }
+    if (updates.length === 0) return false;
 
-    values.push(user_id);
+    values.push(userId);
 
-    const sql = `UPDATE contractor_details SET ${updates.join(', ')} WHERE user_id = ?`;
-    const [result] = await db.query(sql, values);
-    return result;
+    const [result] = await pool.query(
+      `UPDATE admin_details SET ${updates.join(', ')} WHERE user_id = ?`,
+      values
+    );
+    return result.affectedRows > 0;
   },
 
-  deleteUser: async (user_id) => {
-    const sql = `DELETE FROM users WHERE user_id = ?`;
-    const [result] = await db.query(sql, [user_id]);
-    return result;
+  async deleteUser(userId) {
+    const [result] = await pool.query('DELETE FROM users WHERE user_id = ?', [userId]);
+    return result.affectedRows > 0;
   },
-
-  findByEmail: async (email) => {
-    const sql = `
-      SELECT u.user_id, u.email, u.password_hash, r.role_name
-      FROM users u
-      JOIN roles r ON u.role_id = r.role_id
-      WHERE u.email = ?
-    `;
-    const [rows] = await db.query(sql, [email]);
-    return rows[0];
-  },
-
-  findRoleIdByName: async (role_name) => {
-    const sql = `SELECT role_id FROM roles WHERE role_name = ?`;
-    const [rows] = await db.query(sql, [role_name]);
-    return rows[0]?.role_id;
-  }
 };
 
 module.exports = User;

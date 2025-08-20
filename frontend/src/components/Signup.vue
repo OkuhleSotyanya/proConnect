@@ -14,6 +14,9 @@
           <div class="mb-3">
             <label for="password" class="form-label">Password</label>
             <input v-model="form.password" type="password" id="password" class="form-control" required />
+            <small v-if="form.password && form.password.length < 6" class="text-danger">
+              Password must be at least 6 characters
+            </small>
           </div>
 
           <!-- Role Selection -->
@@ -35,9 +38,12 @@
           <div class="mb-3">
             <label for="phone_number" class="form-label">Phone Number</label>
             <input v-model="form.phone_number" type="text" id="phone_number" class="form-control" required />
+            <small v-if="form.phone_number && !/^\d{10}$/.test(form.phone_number)" class="text-danger">
+              Phone number must be 10 digits
+            </small>
           </div>
 
-          <!-- Address (NEW) -->
+          <!-- Address -->
           <div class="mb-3">
             <label for="address" class="form-label">Address</label>
             <input v-model="form.address" type="text" id="address" class="form-control" required />
@@ -66,8 +72,11 @@
           </div>
 
           <!-- Submit -->
-          <button type="submit" class="btn btn-primary w-100" :disabled="!form.role">Sign Up</button>
+          <button type="submit" class="btn btn-primary w-100" :disabled="!form.role || form.password.length < 6 || (form.phone_number && !/^\d{10}$/.test(form.phone_number))">Sign Up</button>
           <p v-if="error" class="text-danger mt-3 text-center">{{ error }}</p>
+          <ul v-if="validationErrors.length" class="text-danger mt-3">
+            <li v-for="(err, index) in validationErrors" :key="index">{{ err.msg }}</li>
+          </ul>
         </form>
         <p class="mt-3 text-center">
           Already have an account? <router-link to="/" class="text-primary">Login</router-link>
@@ -90,46 +99,110 @@ export default {
         role: '',
         fullname: '',
         phone_number: '',
-        address: '', // NEW FIELD
+        address: '',
         certification_pdf: '',
         card_photo: '',
         hourly_rate: '',
         job_experience: '',
         description: ''
       },
-      error: ''
+      error: '',
+      validationErrors: []
     };
   },
   methods: {
     async handleSignup() {
       if (!this.form.role) {
         this.error = 'Please select a role';
+        this.validationErrors = [];
         return;
       }
+
+      if (this.form.password.length < 6) {
+        this.error = 'Password must be at least 6 characters';
+        this.validationErrors = [];
+        return;
+      }
+
+      if (!/^\d{10}$/.test(this.form.phone_number)) {
+        this.error = 'Phone number must be 10 digits';
+        this.validationErrors = [];
+        return;
+      }
+
       try {
         const payload = {
           email: this.form.email,
           password: this.form.password,
-          role: this.form.role,
-          fullname: this.form.fullname,
           phone_number: this.form.phone_number,
-          address: this.form.address // Include address in payload
+          address: this.form.address
         };
 
-        if (this.form.role === 'contractor') {
+        let endpoint;
+        if (this.form.role === 'client') {
+          endpoint = 'http://localhost:3000/api/auth/register/client';
+          payload.fullname = this.form.fullname;
+        } else if (this.form.role === 'contractor') {
+          endpoint = 'http://localhost:3000/api/auth/register/contractor';
+          payload.full_name = this.form.fullname; // Match backend field name
           payload.certification_pdf = this.form.certification_pdf;
           payload.card_photo = this.form.card_photo;
           payload.hourly_rate = parseFloat(this.form.hourly_rate);
           payload.job_experience = this.form.job_experience;
           payload.description = this.form.description;
+        } else {
+          this.error = 'Invalid role selected';
+          this.validationErrors = [];
+          return;
         }
 
-        await axios.post('http://localhost:3000/api/auth/signup', payload);
-        this.$router.push('/');
+        const response = await axios.post(endpoint, payload);
+        const { token, user } = response.data;
+
+        // Store token and user data
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+
+        // Route based on role
+        const roleMap = {
+          2: 'client',
+          3: 'contractor'
+        };
+        const roleName = roleMap[user.role_id];
+        if (roleName === 'client') {
+          this.$router.push('/client/home');
+        } else if (roleName === 'contractor') {
+          this.$router.push('/contractor/home');
+        }
       } catch (error) {
+        this.validationErrors = error.response?.data?.errors || [];
         this.error = error.response?.data?.message || 'Signup failed. Please try again.';
       }
     }
   }
 };
 </script>
+
+<style scoped>
+.centered-wrapper {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.card {
+  border-radius: 10px;
+}
+.btn-primary {
+  background-color: #007bff;
+  border-color: #007bff;
+}
+.btn-primary:hover {
+  background-color: #0056b3;
+  border-color: #004085;
+}
+.form-control:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+</style>

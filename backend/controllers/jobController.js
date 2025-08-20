@@ -1,7 +1,6 @@
-// jobController.js
+// controllers/jobController.js
 const JobModel = require('../models/jobModel');
 const socketManager = require('../utils/socketManager');
-
 
 const JobController = {
   async createJob(req, res) {
@@ -11,9 +10,17 @@ const JobController = {
       }
 
       const client_id = req.user.user_id; // Use JWT instead of body
-      const { contractor_id, service_type, description, location, job_date } = req.body;
+      const {
+        contractor_id,
+        service_type,
+        description,
+        location,
+        amount,
+        hours_to_work,
+        job_date
+      } = req.body;
 
-      if (!contractor_id || !service_type || !job_date) {
+      if (!contractor_id || !service_type || amount == null || hours_to_work == null || !job_date) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
@@ -23,34 +30,49 @@ const JobController = {
         return res.status(400).json({ error: 'Invalid contractor ID' });
       }
 
-      // Validate job_date
-      const parsedDate = Date.parse(job_date);
+      // Validate job_date (allow today or future)
+      const parsedDate = Date.parse(job_date); // expects YYYY-MM-DD
       if (isNaN(parsedDate)) {
-        return res.status(400).json({ error: 'Invalid job_date format' });
+        return res.status(400).json({ error: 'Invalid job_date format (use YYYY-MM-DD)' });
       }
-      if (parsedDate < Date.now()) {
+      const endOfToday = new Date();
+      endOfToday.setHours(23, 59, 59, 999);
+      if (parsedDate > endOfToday.getTime() + 365 * 24 * 60 * 60 * 1000) {
+        return res.status(400).json({ error: 'job_date is too far in the future' });
+      }
+      // Disallow past days only (compare by date, not time of day)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const jobDay = new Date(parsedDate);
+      jobDay.setHours(0, 0, 0, 0);
+      if (jobDay.getTime() < today.getTime()) {
         return res.status(400).json({ error: 'job_date cannot be in the past' });
       }
 
+      // Create job - FIXED ARG ORDER
       const jobId = await JobModel.createJob(
         client_id,
         contractor_id,
         service_type,
         description,
         location,
-        job_date
+        job_date,            // <- jobDate here
+        Number(amount) || 0, // <- amount
+        Number(hours_to_work) || 0 // <- hoursToWork
       );
 
       // Notify contractor
       const io = req.app.get('io');
       const contractorSocket = socketManager.getSocketId(contractor_id);
-      if (contractorSocket) {
+      if (contractorSocket && io) {
         io.to(contractorSocket).emit('newJobRequest', {
           job_id: jobId,
           client_id,
           service_type,
           description,
           location,
+          amount,
+          hours_to_work,
           job_date
         });
       } else {
@@ -126,7 +148,7 @@ const JobController = {
       const client_id = job.client_id;
       const io = req.app.get('io');
       const clientSocket = socketManager.getSocketId(client_id);
-      if (clientSocket) {
+      if (clientSocket && io) {
         io.to(clientSocket).emit('jobStatusUpdate', { job_id, status });
       } else {
         console.warn(`Client ${client_id} is offline; queuing notification`);

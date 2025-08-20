@@ -1,42 +1,40 @@
 <template>
-  <div class="min-vh-100 bg-light">
-    <router-view></router-view>
-  </div>
-
-   <div id="app">
-    
-    <!-- Footer -->
-    <footer class="footer">
-      <p>&copy; 2025 ProConnect. All rights reserved.</p>
-      <div class="footer-icons">
-        <a href="#"><i class="fab fa-facebook-f"></i></a>
-        <a href="#"><i class="fab fa-twitter"></i></a>
-        <a href="#"><i class="fab fa-linkedin-in"></i></a>
+  <div id="admin-layout">
+    <!-- Admin-specific Navigation -->
+    <nav class="admin-nav">
+      <div class="logo">ProConnect</div>
+      <div class="nav-links">
+        <!-- These router-links point to your nested admin routes -->
+        <router-link to="/admin/dashboard">Dashboard</router-link>
+        <router-link to="/admin/clients">Clients</router-link>
+        <router-link to="/admin/contractors">Contractors</router-link>
+        <router-link to="/admin/jobs">Jobs</router-link>
+        <router-link to="/admin/payments">Payments</router-link>
+        <router-link to="/admin/profile">Profile</router-link>
       </div>
-    </footer>
+    </nav>
+
+    <main class="content">
+      <router-view />
+    </main>
+    
+    
   </div>
 </template>
 
 <script>
 export default {
-  name: 'App'
+  name: 'AdminLayout',
 };
 </script>
-<style>
-/* Base layout */
-html, body {
-  height: 100%;
-  margin: 0;
-  font-family: Arial, sans-serif;
-}
 
-#app {
+<style scoped>
+#admin-layout {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
 }
 
-/* Navigation */
 .admin-nav {
   background-color: #2c3e50;
   padding: 10px 20px;
@@ -59,6 +57,7 @@ html, body {
 .nav-links a {
   color: white;
   text-decoration: none;
+  padding: 5px;
 }
 
 .nav-links a.router-link-exact-active {
@@ -66,13 +65,11 @@ html, body {
   border-bottom: 2px solid #fff;
 }
 
-/* Main content */
 .content {
   flex: 1;
   padding: 20px;
 }
 
-/* Footer */
 .footer {
   background-color: #111;
   color: white;

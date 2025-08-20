@@ -22,6 +22,9 @@
           </div>
           <button type="submit" class="btn btn-primary w-100" :disabled="!role">Login</button>
           <p v-if="error" class="text-danger mt-3 text-center">{{ error }}</p>
+          <ul v-if="validationErrors.length" class="text-danger mt-3">
+            <li v-for="(err, index) in validationErrors" :key="index">{{ err.msg }}</li>
+          </ul>
         </form>
         <p class="mt-3 text-center">
           Don't have an account? <router-link to="/signup" class="text-primary">Sign Up</router-link>
@@ -41,13 +44,15 @@ export default {
       email: '',
       password: '',
       role: '',
-      error: ''
+      error: '',
+      validationErrors: []
     };
   },
   methods: {
     async handleLogin() {
       if (!this.role) {
         this.error = 'Please select a role';
+        this.validationErrors = [];
         return;
       }
       try {
@@ -55,15 +60,32 @@ export default {
           email: this.email,
           password: this.password
         });
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem('role', response.data.role_name);
 
-        const roleName = response.data.role_name.toLowerCase();
-        if (roleName !== this.role.toLowerCase()) {
-          this.error = `Selected role (${this.role}) does not match user role (${roleName}).`;
+        const { token, user } = response.data;
+        const roleMap = {
+          1: 'admin',
+          2: 'client',
+          3: 'contractor'
+        };
+        const roleName = roleMap[user.role_id];
+
+        if (!roleName) {
+          this.error = 'Invalid role received from server';
+          this.validationErrors = [];
           return;
         }
 
+        if (roleName !== this.role.toLowerCase()) {
+          this.error = `Selected role (${this.role}) does not match user role (${roleName}).`;
+          this.validationErrors = [];
+          return;
+        }
+
+        // Store token and user data
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
+
+        // Route based on role
         switch (roleName) {
           case 'admin':
             this.$router.push('/admin/dashboard');
@@ -74,10 +96,9 @@ export default {
           case 'contractor':
             this.$router.push('/contractor/home');
             break;
-          default:
-            this.error = 'Invalid role received from server';
         }
       } catch (error) {
+        this.validationErrors = error.response?.data?.errors || [];
         this.error = error.response?.data?.message || 'Login failed. Please try again.';
       }
     }
