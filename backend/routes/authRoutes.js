@@ -2,7 +2,11 @@ const express = require('express');
 const router = express.Router();
 const { check, validationResult } = require('express-validator');
 const jwt = require('jsonwebtoken');
+<<<<<<< HEAD
 const pool = require('../config/db');             
+=======
+const pool = require('../config/db');
+>>>>>>> 84e2d83f975bfcda5746b21e62163e34bb6644f1
 const authController = require('../controllers/authController');
 const multer = require('multer');
 const path = require('path');
@@ -65,6 +69,7 @@ const validateProfileUpdate = [
   check('description').optional().notEmpty(),
 ];
 
+<<<<<<< HEAD
 // Multer config for profile files
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'Uploads/'),
@@ -85,11 +90,21 @@ const upload = multer({
   },
 });
 
+=======
+>>>>>>> 84e2d83f975bfcda5746b21e62163e34bb6644f1
 // Dynamic middleware for /register/admin
 const dynamicAdminAuth = async (req, res, next) => {
   try {
     const [admins] = await pool.query('SELECT user_id FROM users WHERE role_id = 1 LIMIT 1');
+<<<<<<< HEAD
     if (admins.length === 0) return next();
+=======
+    if (admins.length === 0) {
+      // No admin exists → allow registration without token
+      return next();
+    }
+    // Admin already exists → require authentication
+>>>>>>> 84e2d83f975bfcda5746b21e62163e34bb6644f1
     return authenticateMiddleware(req, res, next);
   } catch (error) {
     console.error('Error checking existing admins:', error);

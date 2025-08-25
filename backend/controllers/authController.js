@@ -123,11 +123,16 @@ const authController = {
   },
 
   // Register Admin
+  // Register Admin
   async registerAdmin(req, res) {
     try {
       // Check if any admin already exists
       const [admins] = await pool.query(
+<<<<<<< HEAD
         'SELECT user_id FROM users WHERE role_id = 1 LIMIT 1'
+=======
+        'SELECT user_id FROM users WHERE role_id = 1 LIMIT 3'
+>>>>>>> 84e2d83f975bfcda5746b21e62163e34bb6644f1
       );
 
       // If at least one admin exists, require current user to be an admin
