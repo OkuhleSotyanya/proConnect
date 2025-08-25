@@ -1,168 +1,276 @@
 <template>
-  <div class="payment-container">
-    <section class="section">
-      <h2>Client Payments</h2>
-      <ul class="payment-list">
-        <li v-for="(payment, index) in clientPayments" :key="index" class="payment-item">
-          <span><strong>Client:</strong> {{ payment.client }}</span>
-          <span><strong>Amount:</strong> R{{ payment.amount.toFixed(2) }}</span>
-          <span><strong>Reason:</strong> {{ payment.reason }}</span>
-        </li>
-      </ul>
+  <div class="payments-page">
+    <h2>Payments</h2>
+    
+    <div v-if="loading" class="loading-message">Loading payments...</div>
+    <div v-else-if="error" class="error-message">Error: {{ error }}</div>
+    <div v-else-if="payments && payments.length === 0" class="no-payments-message">No payments found.</div>
 
-      <div class="summary">
-        <p><strong>Total Received:</strong> R{{ totalClientRevenue.toFixed(2) }}</p>
-        <p><strong>Deducted (10% Fee):</strong> R{{ totalDeducted.toFixed(2) }}</p>
-        <p><strong>Sent to Contractors:</strong> R{{ totalContractorPayout.toFixed(2) }}</p>
-      </div>
-
-      <button @click="processPayments" class="btn process-btn">Process Payments</button>
-    </section>
-
-    <section class="section">
-      <h2>Contractor Payments</h2>
-      <ul class="payment-list">
-        <li v-for="(payment, index) in contractorPayments" :key="index" class="payment-item">
-          <span><strong>Contractor:</strong> {{ payment.contractor }}</span>
-          <span><strong>Amount:</strong> R{{ payment.amount.toFixed(2) }}</span>
-          <span><strong>Reason:</strong> {{ payment.reason }}</span>
-          <a :href="payment.proof" target="_blank" download="payment_receipt.pdf">Download PDF</a>
-        </li>
-      </ul>
-    </section>
+    <div v-else class="table-wrapper">
+      <table class="payments-table">
+        <thead>
+          <tr>
+            <th>Job ID</th>
+            <th>Client Name</th>
+            <th>Contractor Name</th>
+            <th>Description</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th>Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="payment in payments" :key="payment.id">
+            <td>{{ payment.id }}</td>
+            <td>{{ payment.clientName }}</td>
+            <td>{{ payment.contractorName }}</td>
+            <td>{{ payment.jobDescription }}</td>
+            <td>R{{ payment.amount ? payment.amount.toFixed(2) : 'N/A' }}</td>
+            <td :class="statusClass(payment.status)">{{ payment.status }}</td>
+            <td>{{ formatDate(payment.date) }}</td>
+            <td>
+              <button class="download-btn" @click="generateReceipt(payment)">Download Receipt</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </template>
 
 <script>
+import axios from 'axios';
 import jsPDF from 'jspdf';
 
 export default {
-  name: 'PaymentProcessor',
+  name: 'AdminPayments',
   data() {
     return {
-      clientPayments: [
-        { client: 'Client A', amount: 1000, reason: 'Website Design' },
-        { client: 'Client B', amount: 2000, reason: 'Mobile App Development' }
-      ],
-      contractorPayments: [
-        { contractor: 'Contractor X', amount: 0, reason: '', proof: '' },
-        { contractor: 'Contractor Y', amount: 0, reason: '', proof: '' }
-      ]
+      payments: [],
+      loading: true,
+      error: null
     };
   },
-  computed: {
-    totalClientRevenue() {
-      return this.clientPayments.reduce((sum, payment) => sum + payment.amount, 0);
-    },
-    totalDeducted() {
-      return this.totalClientRevenue * 0.1;
-    },
-    totalContractorPayout() {
-      return this.totalClientRevenue * 0.9;
-    }
+  mounted() {
+    this.fetchPayments();
   },
   methods: {
-    processPayments() {
-      this.contractorPayments = this.clientPayments.map((payment, index) => {
-        const contractor = this.contractorPayments[index]?.contractor || `Contractor ${index + 1}`;
-        const netAmount = payment.amount * 0.9;
-        const reason = `Net payment after 10% fee for ${payment.reason}`;
-
-        const doc = new jsPDF();
-        doc.setFontSize(16);
-        doc.text('Payment Receipt', 20, 20);
-        doc.setFontSize(12);
-        doc.text(`Contractor: ${contractor}`, 20, 40);
-        doc.text(`Amount: R${netAmount.toFixed(2)}`, 20, 50);
-        doc.text(`Reason: ${reason}`, 20, 60);
-        doc.text(`Client: ${payment.client}`, 20, 70);
-
-        const pdfBlob = doc.output('blob');
-        const pdfUrl = URL.createObjectURL(pdfBlob);
-
-        return {
-          id: index + 1,
-          contractor,
-          amount: netAmount,
-          reason,
-          proof: pdfUrl
+    async fetchPayments() {
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+          this.loading = false;
+          this.error = "Authentication token not found. Please log in again.";
+          return;
+      }
+      
+      try {
+        this.loading = true;
+        this.error = null;
+        
+        const config = {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
         };
-      });
+
+        const response = await axios.get('http://localhost:3000/api/admin/payments', config);
+        this.payments = response.data;
+      } catch (err) {
+        // This is the key change to show a more detailed error
+        console.error('Error fetching payments:', err.response ? err.response.data : err.message);
+        const backendError = err.response && err.response.data && err.response.data.details;
+        this.error = backendError || 'Failed to fetch payments. Please ensure you are logged in as an admin.';
+      } finally {
+        this.loading = false;
+      }
+    },
+    formatDate(dateString) {
+      const date = new Date(dateString);
+      return date.toLocaleDateString();
+    },
+    statusClass(status) {
+      switch (status) {
+        case 'completed':
+          return 'status-completed';
+        case 'accepted':
+          return 'status-accepted';
+        case 'pending':
+          return 'status-pending';
+        case 'in_progress':
+          return 'status-in-progress';
+        case 'rejected':
+          return 'status-rejected';
+        case 'cancelled':
+          return 'status-cancelled';
+        default:
+          return '';
+      }
+    },
+    generateReceipt(payment) {
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text('Payment Receipt', 20, 20);
+      doc.setFontSize(12);
+      doc.text(`Job ID: ${payment.id}`, 20, 40);
+      doc.text(`Client: ${payment.clientName}`, 20, 50);
+      doc.text(`Contractor: ${payment.contractorName}`, 20, 60);
+      doc.text(`Description: ${payment.jobDescription}`, 20, 70);
+      doc.text(`Amount: R${payment.amount.toFixed(2)}`, 20, 80);
+      doc.text(`Status: ${payment.status}`, 20, 90);
+      doc.text(`Date: ${this.formatDate(payment.date)}`, 20, 100);
+      
+      doc.save(`receipt-job-${payment.id}.pdf`);
     }
   }
 };
 </script>
 
 <style scoped>
-.payment-container {
+.payments-page {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  padding: 30px;
-  max-width: 800px;
-  margin: auto;
+  padding: 20px;
   background-color: #f9f9f9;
-  border-radius: 8px;
 }
 
-.section {
-  margin-bottom: 40px;
-}
-
-h2 {
-  color: #2c3e50;
+.payments-page h2 {
   margin-bottom: 20px;
-  border-bottom: 2px solid #ddd;
-  padding-bottom: 5px;
+  color: #2c3e50;
+  font-size: 1.8em;
 }
 
-.payment-list {
-  list-style: none;
-  padding: 0;
+.table-wrapper {
+  overflow-x: auto;
 }
 
-.payment-item {
-  background-color: #fff;
-  border: 1px solid #ddd;
-  padding: 12px 16px;
-  margin-bottom: 10px;
-  border-radius: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.payments-table {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+  min-width: 800px;
 }
 
-.summary {
-  margin-top: 20px;
-  font-size: 16px;
-  color: #34495e;
+.payments-table th,
+.payments-table td {
+  padding: 14px 18px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+  vertical-align: top;
 }
 
-a {
-  color: #2980b9;
-  text-decoration: none;
-  font-weight: 500;
+.payments-table th {
+  background-color: #f0f0f0;
+  font-weight: 600;
+  color: #555;
+  white-space: nowrap;
 }
 
-a:hover {
-  text-decoration: underline;
+.payments-table td {
+  color: #333;
+  word-break: break-word;
 }
 
-.btn {
-  display: inline-block;
-  margin-top: 20px;
-  padding: 10px 20px;
-  font-size: 16px;
-  border: none;
-  border-radius: 6px;
+.payments-table tr:hover {
+  background-color: #f5f5f5;
 }
 
-.process-btn {
+.loading-message, .error-message, .no-payments-message {
+  padding: 20px;
+  text-align: center;
+  font-size: 1.1em;
+  color: #555;
+}
+.error-message {
+  color: #e74c3c;
+  font-weight: bold;
+}
+
+/* Status styling */
+.status-completed {
+  color: #27ae60;
+  font-weight: bold;
+}
+.status-accepted {
+  color: #3498db;
+  font-weight: bold;
+}
+.status-pending {
+  color: #f39c12;
+  font-weight: bold;
+}
+.status-in-progress {
+  color: #8e44ad;
+  font-weight: bold;
+}
+.status-rejected {
+  color: #c0392b;
+  font-weight: bold;
+}
+.status-cancelled {
+  color: #555;
+  font-weight: bold;
+}
+
+.download-btn {
   background-color: #3498db;
   color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.2s ease;
+  font-size: 0.9em;
+}
+.download-btn:hover {
+  background-color: #2980b9;
 }
 
-.process-btn:hover {
-  background-color: #2980b9;
+/* 📱 Responsive Styles */
+@media (max-width: 1024px) {
+  .payments-page h2 {
+    font-size: 1.6em;
+  }
+
+  .payments-table th,
+  .payments-table td {
+    padding: 12px 14px;
+    font-size: 0.95em;
+  }
+}
+
+@media (max-width: 768px) {
+  .payments-page h2 {
+    font-size: 1.4em;
+  }
+
+  .payments-table th,
+  .payments-table td {
+    padding: 10px 12px;
+    font-size: 0.9em;
+  }
+}
+
+@media (max-width: 480px) {
+  .payments-page {
+    padding: 10px;
+  }
+
+  .payments-page h2 {
+    font-size: 1.2em;
+    text-align: center;
+  }
+
+  .payments-table {
+    font-size: 0.85em;
+    min-width: unset;
+  }
+
+  .payments-table th,
+  .payments-table td {
+    padding: 8px 10px;
+  }
 }
 </style>

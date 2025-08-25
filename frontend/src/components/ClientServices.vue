@@ -1,327 +1,357 @@
 <template>
-  <div class="contractors-page">
-    <h1>Contractors</h1>
-
-    <div class="contractor-list">
-      <div
-        v-for="contractor in contractors"
-        :key="contractor.id"
-        class="contractor-card"
-      >
-        <img :src="contractor.image" alt="Contractor Image" class="contractor-image" />
-        <h2>{{ contractor.name }}</h2>
-        <p><strong>Rate:</strong> {{ contractor.hourlyrate }}</p>
-        <p><strong>Profession:</strong> {{ contractor.profession }}</p>
-
-        <div class="actions">
-          <button class="btn primary" @click="viewProfile(contractor)">View Profile</button>
-          <button class="btn secondary" @click="openBookingForm(contractor)">Book</button>
-          <button class="btn download" @click="downloadCertificate(contractor)">Download Certificate</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Profile Modal -->
-    <div v-if="selectedContractor && showProfileModal" class="modal-overlay" @click.self="closeProfile">
-      <div class="modal-content profile-modal">
-        <h2>{{ selectedContractor.name }}</h2>
-        <img :src="selectedContractor.image" alt="Profile Image" class="profile-image" />
-        <p><strong>Rate:</strong> {{ selectedContractor.hourlyrate }}</p>
-        <p><strong>Profession:</strong> {{ selectedContractor.profession }}</p>
-        <p>{{ selectedContractor.bio }}</p>
-        <div class="modal-actions">
-          <button class="btn close" @click="closeProfile">Close</button>
-        </div>
+  <div class="client-services">
+    <h1>Available Contractors</h1>
+    <div v-if="loading">Loading contractors...</div>
+    <div v-else-if="error">{{ error }}</div>
+    <div v-else class="contractors-list">
+      <div v-for="contractor in contractors" :key="contractor.user_id" class="contractor-card">
+        <img :src="contractor.card_photo" alt="Contractor Photo" class="contractor-photo" />
+        <h2>{{ contractor.full_name }}</h2>
+        <p><strong>Phone:</strong> {{ contractor.phone_number }}</p>
+        <p><strong>Address:</strong> {{ contractor.address || 'N/A' }}</p>
+        <p><strong>Hourly Rate:</strong> R{{ contractor.hourly_rate }}</p>
+        <p><strong>Experience:</strong> {{ contractor.job_experience }}</p>
+        <p><strong>Description:</strong> {{ contractor.description }}</p>
+        <button @click="openBookingModal(contractor)">Book Contractor</button>
       </div>
     </div>
 
     <!-- Booking Modal -->
-    <div v-if="selectedContractor && showBookingForm" class="modal-overlay" @click.self="closeBookingForm">
-      <div class="modal-content booking-modal">
-        <h2>Book {{ selectedContractor.name }}</h2>
+    <div v-if="showModal" class="modal-overlay">
+      <div class="modal-content">
+        <h2>Book {{ selectedContractor.full_name }}</h2>
         <form @submit.prevent="submitBooking">
           <label>
             Service Type:
-            <input v-model="form.service_type" required placeholder="e.g., Plumbing, Electrical" />
+            <input v-model="form.service_type" type="text" required />
           </label>
-
+          <label>
+            Description:
+            <textarea v-model="form.description" required></textarea>
+          </label>
           <label>
             Location:
-            <input v-model="form.location" required placeholder="Enter job location" />
+            <input v-model="form.location" type="text" required />
           </label>
-
           <label>
             Job Date:
-            <input type="date" v-model="form.job_date" required />
+            <input v-model="form.job_date" type="date" required />
           </label>
-
-          <label>
-            Amount (ZAR):
-            <input type="number" v-model="form.amount" required min="0" step="0.01" placeholder="Enter total amount" />
-          </label>
-
           <label>
             Hours to Work:
-            <input type="number" v-model="form.hours_to_work" required min="0" step="0.1" placeholder="Enter hours" />
+            <input v-model.number="form.hours_to_work" type="number" min="1" required @input="calculateAmount" />
           </label>
-
           <label>
-            Job Description:
-            <textarea v-model="form.description" required placeholder="Describe the job"></textarea>
+            Amount (after 10% service fee):
+            <input :value="form.amount" type="text" readonly />
           </label>
-
-          <div class="form-actions">
-            <button type="submit" class="btn primary" :disabled="isSubmitting">Submit Request</button>
-            <button type="button" class="btn close" @click="closeBookingForm">Cancel</button>
-          </div>
-          <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+          <button type="submit">Submit Booking</button>
+          <button type="button" @click="closeModal">Cancel</button>
         </form>
       </div>
     </div>
   </div>
 </template>
 
-<script>
+<script setup>
+import { ref, onMounted } from 'vue';
 import axios from 'axios';
+import { io } from 'socket.io-client';
+import { useRouter } from 'vue-router';
 
-const BASE_URL = 'http://localhost:3000';
+const contractors = ref([]);
+const loading = ref(true);
+const error = ref(null);
+const showModal = ref(false);
+const selectedContractor = ref(null);
+const router = useRouter();
+const clientId = ref(null);
+const socket = io('http://localhost:3000');
 
-function isAbsoluteUrl(url) {
-  return /^https?:\/\//i.test(url);
-}
-function normalizeFileUrl(path) {
-  if (!path) return '';
-  // Trim whitespace and ensure absolute
-  const trimmed = String(path).trim();
-  if (!trimmed) return '';
-  return isAbsoluteUrl(trimmed) ? trimmed : `${BASE_URL}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
-}
+const form = ref({
+  service_type: '',
+  description: '',
+  location: '',
+  job_date: '',
+  hours_to_work: 0,
+  amount: 0
+});
 
-export default {
-  name: "ClientsServices",
-  data() {
-    return {
-      contractors: [],
-      selectedContractor: null,
-      showProfileModal: false,
-      showBookingForm: false,
-      form: {
-        service_type: '',
-        location: '',
-        job_date: '',
-        amount: '',
-        hours_to_work: '',
-        description: ''
-      },
-      isSubmitting: false,
-      errorMessage: ''
-    };
-  },
-  async created() {
-    await this.fetchContractors();
-  },
-  methods: {
-    async fetchContractors() {
-      try {
-        const response = await axios.get(`${BASE_URL}/api/contractors/list`, {
-          params: {
-            page: 1,
-            limit: 10,
-            sortBy: 'full_name',
-            sortDir: 'asc'
-          }
-        });
-        this.contractors = response.data.data.map(contractor => {
-          const img = normalizeFileUrl(contractor.card_photo) || 'https://via.placeholder.com/400x250?text=No+Image';
-          const cert = normalizeFileUrl(contractor.certification_pdf);
-          return {
-            id: contractor.user_id,
-            name: contractor.full_name || contractor.email,
-            hourlyrate: contractor.hourly_rate != null ? `R${contractor.hourly_rate}/hr` : 'Rate not set',
-            profession: contractor.description || '—',
-            bio: contractor.description || '',
-            image: img,
-            certification_pdf: cert
-          };
-        });
-      } catch (error) {
-        console.error('Error fetching contractors:', error);
-        this.errorMessage = error?.response?.data?.message || 'Failed to load contractors. Please try again.';
-      }
-    },
-    viewProfile(contractor) {
-      this.selectedContractor = contractor;
-      this.showProfileModal = true;
-    },
-    closeProfile() {
-      this.showProfileModal = false;
-      this.selectedContractor = null;
-    },
-    openBookingForm(contractor) {
-      this.selectedContractor = contractor;
-      this.showBookingForm = true;
-    },
-    closeBookingForm() {
-      this.showBookingForm = false;
-      this.selectedContractor = null;
-      this.resetForm();
-    },
-    resetForm() {
-      this.form = {
-        service_type: '',
-        location: '',
-        job_date: '',
-        amount: '',
-        hours_to_work: '',
-        description: ''
-      };
-      this.errorMessage = '';
-    },
-    async submitBooking() {
-      this.isSubmitting = true;
-      this.errorMessage = '';
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          throw new Error('Please log in to book a contractor.');
-        }
-        // Basic front-end validation: ensure job_date is today or future
-        if (!this.form.job_date) throw new Error('Please select a job date.');
-        const today = new Date(); today.setHours(0,0,0,0);
-        const chosen = new Date(this.form.job_date); chosen.setHours(0,0,0,0);
-        if (chosen.getTime() < today.getTime()) {
-          throw new Error('Job date cannot be in the past.');
-        }
-
-        const payload = {
-          contractor_id: this.selectedContractor.id,
-          service_type: this.form.service_type.trim(),
-          description: this.form.description.trim(),
-          location: this.form.location.trim(),
-          amount: Number(this.form.amount),
-          hours_to_work: Number(this.form.hours_to_work),
-          job_date: this.form.job_date // YYYY-MM-DD
-        };
-
-        const response = await axios.post(
-          `${BASE_URL}/api/jobs`,
-          payload,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        alert(`Booking submitted for ${this.selectedContractor.name}.\nJob ID: ${response.data.job_id}`);
-        this.closeBookingForm();
-      } catch (error) {
-        console.error('Error submitting booking:', error);
-        this.errorMessage =
-          error.response?.data?.error ||
-          error.response?.data?.message ||
-          error.message ||
-          'Failed to submit booking. Please try again.';
-      } finally {
-        this.isSubmitting = false;
-      }
-    },
-    downloadCertificate(contractor) {
-      const href = normalizeFileUrl(contractor.certification_pdf);
-      if (!href) {
-        alert('Certificate not available for this contractor.');
-        return;
-      }
-      // Create an anchor and click (works across most browsers)
-      const link = document.createElement('a');
-      link.href = href;
-      link.download = `certificate_${(contractor.name || 'contractor')
-        .replace(/\s+/g, '_')
-        .replace(/[^a-zA-Z0-9_]/g, '')}.pdf`;
-      link.target = '_blank';
-      link.rel = 'noopener';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+onMounted(() => {
+  const user = localStorage.getItem('user');
+  if (user) {
+    const parsedUser = JSON.parse(user);
+    clientId.value = parsedUser.user_id;
+    if (parsedUser.role_id !== 2) { // Assuming 1 = client
+      alert('Access restricted to clients only');
+      router.push('/');
+      return;
     }
+  } else {
+    alert('Please log in to access this page');
+    router.push('/login');
+    return;
+  }
+
+  fetchContractors();
+
+  // Listen to job updates (optional if client wants confirmation)
+  socket.on(`jobBookedForClient_${clientId.value}`, (job) => {
+    alert(`Your job request for ${job.service_type} has been submitted!`);
+  });
+});
+
+const fetchContractors = async () => {
+  try {
+    const response = await axios.get('http://localhost:3000/contractors');
+    contractors.value = response.data.data;
+  } catch (err) {
+    error.value = 'Failed to load contractors';
+  } finally {
+    loading.value = false;
+  }
+};
+
+const openBookingModal = (contractor) => {
+  selectedContractor.value = contractor;
+  form.value.amount = 0;
+  form.value.hours_to_work = 0;
+  showModal.value = true;
+};
+
+const closeModal = () => {
+  showModal.value = false;
+  selectedContractor.value = null;
+  form.value = {
+    service_type: '',
+    description: '',
+    location: '',
+    job_date: '',
+    hours_to_work: 0,
+    amount: 0
+  };
+};
+
+const calculateAmount = () => {
+  if (selectedContractor.value && form.value.hours_to_work > 0) {
+    const total = selectedContractor.value.hourly_rate * form.value.hours_to_work;
+    const serviceFee = total * 0.10;
+    form.value.amount = Math.round(total - serviceFee);
+  }
+};
+
+const submitBooking = async () => {
+  if (!clientId.value) return alert('You must be logged in to book');
+
+  const jobData = {
+    client_id: parseInt(clientId.value),
+    contractor_id: selectedContractor.value.user_id,
+    service_type: form.value.service_type,
+    description: form.value.description,
+    location: form.value.location,
+    job_date: form.value.job_date,
+    status: 'request',
+    amount: form.value.amount,
+    hours_to_work: form.value.hours_to_work
+  };
+
+  try {
+    await axios.post('http://localhost:3000/api/jobRequests', jobData);
+    socket.emit('jobBooked', jobData); // Emit to backend
+    alert('Booking submitted successfully');
+    closeModal();
+  } catch (err) {
+    console.error('Booking error:', err.response?.data || err.message);
+    alert('Failed to submit booking: ' + (err.response?.data?.message || 'Server error'));
   }
 };
 </script>
 
 <style scoped>
-/* (unchanged styles) */
-.contractors-page {
-  padding: 20px;
+.client-services {
+  padding: 50px 20px;
+  max-width: 1200px;
+  margin: auto;
+  font-family: 'Inter', sans-serif;
+  background: linear-gradient(135deg, #f9fafc, #eef2f7);
+  min-height: 100vh;
 }
 
-.contractor-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
+.client-services h1 {
+  text-align: center;
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: #222;
+  margin-bottom: 40px;
+  letter-spacing: -0.5px;
+}
+
+.contractors-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 25px;
 }
 
 .contractor-card {
-  background: white;
-  border-radius: 10px;
-  padding: 15px;
-  width: 250px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.08);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   text-align: center;
 }
 
-.contractor-image {
+.contractor-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.12);
+}
+
+.contractor-photo {
   width: 100%;
-  height: 150px;
+  height: 180px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: 12px;
+  margin-bottom: 15px;
 }
 
-.actions {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.contractor-card h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 10px;
 }
 
-.btn {
-  padding: 10px;
-  border-radius: 6px;
-  font-size: 0.9rem;
+.contractor-card p {
+  margin: 5px 0;
+  font-size: 0.95rem;
+  color: #555;
+  text-align: left;
+}
+
+.contractor-card p strong {
+  color: #222;
+}
+
+.contractor-card button {
+  margin-top: 15px;
+  padding: 10px 18px;
   border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #1e90ff, #4aa3ff);
+  color: #fff;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s ease-in-out;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 10px rgba(30, 144, 255, 0.3);
 }
 
-.btn.primary { background: #4caf50; color: white; }
-.btn.primary:hover { background: #3d8b41; }
-.btn.primary:disabled { background: #cccccc; cursor: not-allowed; }
+.contractor-card button:hover {
+  background: linear-gradient(135deg, #187bcd, #339af0);
+  box-shadow: 0 6px 14px rgba(30, 144, 255, 0.4);
+}
 
-.btn.secondary { background: #2196f3; color: white; }
-.btn.secondary:hover { background: #1976d2; }
-
-.btn.download { background: #ff9800; color: white; }
-.btn.download:hover { background: #e68900; }
-
-.btn.close { background: #f44336; color: white; }
-.btn.close:hover { background: #d32f2f; }
-
+/* ===== Modal Styling ===== */
 .modal-overlay {
   position: fixed;
-  top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex; justify-content: center; align-items: center;
-  z-index: 1000;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2000;
 }
 
 .modal-content {
-  background: white; padding: 2rem; border-radius: 10px;
-  width: 90%; max-width: 500px; max-height: 90vh; overflow-y: auto;
+  background: #fff;
+  padding: 30px 35px;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  animation: slideDown 0.3s ease;
 }
 
-.profile-modal img { width: 100%; border-radius: 8px; margin-bottom: 1rem; }
-.modal-actions { margin-top: 1rem; text-align: right; }
-
-form { display: flex; flex-direction: column; gap: 1rem; }
-label { display: flex; flex-direction: column; font-weight: 600; }
-
-input, textarea {
-  padding: 0.5rem; border: 1px solid #ccc; border-radius: 6px;
+@keyframes slideDown {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
-.error { color: #f44336; font-size: 0.9rem; margin-top: 0.5rem; }
+.modal-content h2 {
+  margin-bottom: 20px;
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-align: center;
+  color: #2c3e50;
+}
+
+/* ===== Form Styling ===== */
+.modal-content form label {
+  display: block;
+  margin-bottom: 15px;
+  font-weight: 600;
+  color: #333;
+  font-size: 0.95rem;
+}
+
+.modal-content input,
+.modal-content textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #dcdcdc;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  color: #444;
+  margin-top: 6px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background: #fafafa;
+}
+
+.modal-content input:focus,
+.modal-content textarea:focus {
+  outline: none;
+  border-color: #1e90ff;
+  box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.15);
+  background: #fff;
+}
+
+.modal-content textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* Buttons in form */
+.modal-content form button {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 10px;
+  margin-top: 15px;
+}
+
+.modal-content form button[type="submit"] {
+  background: linear-gradient(135deg, #28a745, #3edc81);
+  color: white;
+  box-shadow: 0 4px 10px rgba(40, 167, 69, 0.25);
+}
+
+.modal-content form button[type="submit"]:hover {
+  background: linear-gradient(135deg, #218838, #2ecc71);
+  box-shadow: 0 6px 14px rgba(40, 167, 69, 0.35);
+}
+
+.modal-content form button[type="button"] {
+  background: #f1f1f1;
+  color: #444;
+}
+
+.modal-content form button[type="button"]:hover {
+  background: #e2e2e2;
+}
+
 </style>

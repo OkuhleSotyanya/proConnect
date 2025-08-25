@@ -1,37 +1,38 @@
+-- pro_connect.sql
 CREATE DATABASE IF NOT EXISTS `pro_connect` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
 USE `pro_connect`;
 
 -- Disable foreign key checks temporarily to drop tables
 SET FOREIGN_KEY_CHECKS = 0;
 
--- Drop existing tables
+-- Drop existing tables (unchanged)
 DROP TABLE IF EXISTS `admin`;
 DROP TABLE IF EXISTS `clients`;
 DROP TABLE IF EXISTS `contractors`;
 DROP TABLE IF EXISTS `job_request`;
 DROP TABLE IF EXISTS `roles`;
-DROP TABLE IF EXISTS `users`;
+DROP TABLE IF EXISTS `users`; 
 DROP TABLE IF EXISTS `admin_details`;
 DROP TABLE IF EXISTS `client_details`;
 DROP TABLE IF EXISTS `contractor_details`;
 DROP TABLE IF EXISTS `job_completed`;
 
--- Create roles table to define available roles
+-- Create roles table (unchanged)
 CREATE TABLE `roles` (
   `role_id` int NOT NULL AUTO_INCREMENT,
-  `role_name` varchar(50) NOT NULL, -- e.g., 'admin', 'client', 'contractor'
+  `role_name` varchar(50) NOT NULL,
   `description` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`role_id`),
   UNIQUE KEY `role_name` (`role_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- Insert default roles
+-- Insert default roles (unchanged)
 INSERT INTO `roles` (`role_name`, `description`) VALUES
 ('admin', 'System administrator with full access'),
 ('client', 'Client who can request jobs'),
 ('contractor', 'Contractor who can accept and perform jobs');
 
--- Create unified users table
+-- Create users table (unchanged)
 CREATE TABLE `users` (
   `user_id` int NOT NULL AUTO_INCREMENT,
   `email` varchar(255) NOT NULL,
@@ -43,73 +44,61 @@ CREATE TABLE `users` (
   FOREIGN KEY (`role_id`) REFERENCES `roles` (`role_id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- Create admin_details table for admin-specific data
+-- Create admin_details table (unchanged)
 CREATE TABLE `admin_details` (
   `user_id` int NOT NULL,
   `address` varchar(255) NOT NULL,
-  `email` varchar(255) DEFAULT NULL, -- Optional admin-specific field
+  `email` varchar(255) DEFAULT NULL,
   FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-
-
--- Create client_details table for client-specific data
+-- Create client_details table (unchanged)
 CREATE TABLE `client_details` (
   `user_id` int NOT NULL,
-  `fullname` varchar(150) DEFAULT NULL,
-  `phone_number` varchar(150) DEFAULT NULL,
-  `address` varchar(255) DEFAULT NULL, -- Added address column
+  `fullname` varchar(100),
+  `phone_number` varchar(20),
+  `address` varchar(255) DEFAULT NULL,
+  `email` varchar(255) DEFAULT NULL,
   FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-ALTER TABLE `client_details`
-MODIFY `fullname` varchar(100),
-MODIFY `phone_number` varchar(20);
-
--- Create contractor_details table for contractor-specific data
+-- Create contractor_details table (unchanged)
 CREATE TABLE `contractor_details` (
   `user_id` int NOT NULL,
   `full_name` varchar(100) NOT NULL,
   `phone_number` varchar(20) DEFAULT NULL,
-  `address` varchar(255) DEFAULT NULL, -- Added address column
-  `certification_pdf` text NOT NULL,
-  `card_photo` text NOT NULL,
+  `address` varchar(255) DEFAULT NULL,
+  `certification_pdf` LONGBLOB NOT NULL,
+  `card_photo` varchar(255) NOT NULL,
   `hourly_rate` decimal(10,2) NOT NULL,
   `job_experience` text NOT NULL,
   `description` text NOT NULL,
   FOREIGN KEY (`user_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-ALTER TABLE `contractor_details`
-MODIFY `certification_pdf` LONGBLOB NOT NULL,
-MODIFY `card_photo` varchar(255) NOT NULL;
-
--- Create jobs table to reference users
+-- Create job_request table (updated: status ENUM includes 'denied', amount is DECIMAL)
 CREATE TABLE `job_request` (
   `job_id` int NOT NULL AUTO_INCREMENT,
   `client_id` int NOT NULL,
   `contractor_id` int NOT NULL,
-  `service_type` varchar(100) DEFAULT NULL,
+  `service_type` varchar(100) NOT NULL,
   `description` text,
   `location` varchar(100) DEFAULT NULL,
-  `job_date` date DEFAULT NULL,
-  `status` enum('pending','accepted','rejected','in_progress','completed','cancelled') DEFAULT NULL,
-  `amount` int NOT NULL,
+  `job_date` date NOT NULL,
+  `status` enum('request','pending','completed','denied') DEFAULT 'request',
+  `amount` decimal(10,2) NOT NULL,
   `hours_to_work` int NOT NULL,
-  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `invoice_status` enum('PAID') DEFAULT NULL,
+  `invoice_date` date DEFAULT NULL,
   PRIMARY KEY (`job_id`),
-  FOREIGN KEY (`client_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-  FOREIGN KEY (`contractor_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  KEY `idx_jobs_client_id` (`client_id`),
+  KEY `idx_jobs_contractor_id` (`contractor_id`),
+  KEY `idx_jobs_status` (`status`),
+  CONSTRAINT `job_request_ibfk_1` FOREIGN KEY (`client_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  CONSTRAINT `job_request_ibfk_2` FOREIGN KEY (`contractor_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-ALTER TABLE `job_request`
-MODIFY `service_type` varchar(100) NOT NULL,
-MODIFY `job_date` date NOT NULL;
-
-CREATE INDEX idx_jobs_client_id ON `job_request` (`client_id`);
-CREATE INDEX idx_jobs_contractor_id ON `job_request` (`contractor_id`);
-CREATE INDEX idx_jobs_status ON `job_request` (`status`);
-
+-- Create job_completed table (unchanged)
 CREATE TABLE `job_completed` (
   `completed_id` INT NOT NULL AUTO_INCREMENT,
   `job_id` INT NOT NULL,
@@ -121,13 +110,19 @@ CREATE TABLE `job_completed` (
   `job_date` DATE NOT NULL,
   `rating` DECIMAL(3,2) DEFAULT NULL,
   `review` TEXT DEFAULT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `completed_at` DATETIME NULL,
+  `restored_at` DATETIME NULL,
+  `restored_by_admin_id` INT NULL,
   PRIMARY KEY (`completed_id`),
   FOREIGN KEY (`job_id`) REFERENCES `job_request` (`job_id`) ON DELETE CASCADE,
   FOREIGN KEY (`client_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
-  FOREIGN KEY (`contractor_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE
+  FOREIGN KEY (`contractor_id`) REFERENCES `users` (`user_id`) ON DELETE CASCADE,
+  FOREIGN KEY (`restored_by_admin_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL,
+  INDEX `idx_job_completed_job_id` (`job_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
-
+-- Insert users (updated: add client_id = 21)
 INSERT INTO `users` (`email`, `password_hash`, `role_id`) VALUES
 ('steven.jacobs@gmail.com', '$2b$12$XoTwB1QcvyOrDbmKm8bln.qDSNmaWreL9Ei1sfPzjrsbiky/d.JNq', 3),
 ('njabulo.mthethwa@gmail.com', '$2b$12$Nt5YdVcCZHO3eRyvejO6ruIifBB2WxsYU7f0LlUysiEfekSmUFL0W', 3),
@@ -149,58 +144,50 @@ INSERT INTO `users` (`email`, `password_hash`, `role_id`) VALUES
 ('michael.maseko@gmail.com', '$2b$12$gF9kX0rGfA4oRvI1T2mS0e7iWZpO6P/ZxY7J4T3h8g3R6LqLOyDfa', 2),
 ('karabo.sekati@gmail.com', '$2b$12$gF9kX0rGfA4oRvI1T2mS0e7iWZpO6P/ZxY7J4T3h8g3R6LqLOyDfa', 2),
 ('peter.madonsela@gmail.com', '$2b$12$gF9kX0rGfA4oRvI1T2mS0e7iWZpO6P/ZxY7J4T3h8g3R6LqLOyDfa', 2),
-('admin1@proconnect.com', '$2b$12$wqQ1JjkOpVt9lixUglEj3eFlYg8StkAk0Cnk3Fw9iXQyEuFzYZsaq', 1),
-('admin2@proconnect.com', '$2b$12$vn0IZP8tYvwAM/84gchI.eV93uIawV6Tzq2Km3Rcx2wn9m6yUmEwi', 1);
+('test.client@gmail.com', '$2b$12$gF9kX0rGfA4oRvI1T2mS0e7iWZpO6P/ZxY7J4T3h8g3R6LqLOyDfa', 2);
 
-
-INSERT INTO `contractor_details` 
-(`user_id`,`full_name`,`phone_number`,`address`,`certification_pdf`,`card_photo`,`hourly_rate`,`job_experience`,`description`) VALUES
-(1,'Steven Jacobs','0823456789',NULL,'https://tercia2005.github.io/certificates/stevenjacobscertificate-page-001.jpg','https://media.istockphoto.com/id/487272299/photo/builder-with-spanner-isolated-on-white-background.jpg',150.50,'5 years','5 years Expert in plumbing and pipe installations'),
-(2,'Njabulo Mthethwa','0834567890',NULL,'https://tercia2005.github.io/certificates/njabulomthethwacertificate-page-001.jpg','https://media.istockphoto.com/id/1369061523/photo/portrait-african-black-worker-standing-smile-isolated-on-white-background.jpg',120.00,'3 years','Skilled in electrical repairs and maintenance'),
-(3,'James Petersen','0845678901',NULL,'https://tercia2005.github.io/certificates/jamespetersencertificate-page-001.jpg','https://media.istockphoto.com/id/452568163/photo/handyman-portrair.jpg',180.75,'7 years','Professional in carpentry and custom furniture'),
-(4,'Samanther Daniels','0829876543',NULL,'https://tercia2005.github.io/certificates/samantherdanielscertificate-page-001.jpg','https://i.pinimg.com/736x/33/ba/1f/33ba1fb32ad57dff3439a351b5252781.jpg',145.25,'4 years','Interior design and renovation specialist'),
-(5,'Frank van der Merwe','0832345678',NULL,'https://tercia2005.github.io/certificates/frankvandermerwecertificate-page-001.jpg','https://media.istockphoto.com/id/477693896/photo/manual-worker-holding-spirit-level-with-arms-crossed.jpg',200.00,'10 years','Construction project manager and builder'),
-(6,'Nicole Botha','0848765432',NULL,'https://tercia2005.github.io/certificates/nicolebothacertificate-page-001.jpg','https://media.istockphoto.com/id/186851543/photo/construction-worker.jpg?s=612x612&w=0&k=20&c=j69dXivbLDpOvBxEgEh7VpehdYmjzZoVoDgHxxLzIS8=',135.50,'2 years','Painting and decorative finishes expert'),
-(7,'Matthew Khumalo','0827654321',NULL,'https://tercia2005.github.io/certificates/matthewkhumalocertificate-page-001.jpg','https://media.istockphoto.com/id/487272249/photo/builder-with-trowel-isolated-on-white-background.jpg?s=2048x2048&w=is&k=20&c=E3htY3WPMHpLeVN_J0Fyf02qBwsE8bervoneKy42Z4g=',175.00,'6 years','Roofing and waterproofing professional'),
-(8,'Travis Williams','0836789012',NULL,'https://tercia2005.github.io/certificates/traviswilliamscertificate-page-001.jpg','https://media.istockphoto.com/id/1415280832/photo/smiling-young-worker-with-an-orange-hardhat-holding-a-wrench.jpg?s=2048x2048&w=is&k=20&c=dN5MzURRXg3D__a2BI1KK_a95BHHtg1c7A0byv8hrDU=',160.25,'5 years','Landscaping and garden maintenance'),
-(9,'David Naidoo','0843456789',NULL,'https://tercia2005.github.io/certificates/davidnaidoocertificate-page-001.jpg','https://media.istockphoto.com/id/2175978434/photo/engineer-in-blue-helmet-and-orange-safety-vest-smiling-with-hands-on-hips-white-background.jpg?s=2048x2048&w=is&k=20&c=LpH2xSBQwrMw4Bge061MkvJXYfabHME3upLs2EPxM80=',140.00,'3 years','Tile installation and flooring specialist'),
-(10,'Rose Smith','0821234567',NULL,'https://tercia2005.github.io/certificates/rosesmithcertificate-page-001.jpg','https://media.istockphoto.com/id/516812730/photo/gardener-gardner-woman-with-flower-gardening-garden-occupation-thumbs-up.jpg?s=2048x2048&w=is&k=20&c=C0g5GH2LsOknxI1a4TNNuBv3PSu7vkQXRRIrFFmta_U=',155.75,'4 years','Event setup and decoration expert'),
-(11,'Senzo Dlamini','0839123456',NULL,'https://tercia2005.github.io/certificates/senzodlaminicertificate-page-001.jpg','https://media.istockphoto.com/id/183836345/photo/african-american-construction-foreman.jpg?s=2048x2048&w=is&k=20&c=lz64Dgxu9j66dnk8Pxm6h4pcI7jdNN6Gz8k0xFNCy2c=',130.00,'2 years','Basic plumbing and handyman services'),
-(12,'Joshua Adams','0846543210',NULL,'https://tercia2005.github.io/certificates/joshuadamscertificate-page-001.jpg','https://media.istockphoto.com/id/487254119/photo/builder-with-trowel-isolated-on-white-background.jpg?s=2048x2048&w=is&k=20&c=fe0r8EEh18yczlHbxP4Kss7kEIwvgk-uSlRB2ZpGlsc=',165.50,'6 years','HVAC installation and repair technician'),
-(13,'Jabulani Zulu','0825678901',NULL,'https://tercia2005.github.io/certificates/jabulanizulucertificate-page-001.jpg','https://media.istockphoto.com/id/1157056523/photo/african-american-engineer-with-safety-glasses-and-safety-helmet-reaching-out-to-shake-hands.jpg?s=2048x2048&w=is&k=20&c=xb7Bf_XePPqZM6xn6_duMtypGlE1mcjWJ9jB3r9Ez0c=',150.00,'5 years','Bricklaying and masonry expert'),
-(14,'Simon Nkosi','0837890123',NULL,'https://tercia2005.github.io/certificates/simonnkosicertificate-page-001.jpg','https://media.istockphoto.com/id/670472332/photo/studio-shot-of-young-happy-persian-man-construction-worker-smiling.jpg?s=2048x2048&w=is&k=20&c=XUWOhmAANEOk2WDQ5NjYktjhdTpJU717yHKkFEIhcO4=',170.25,'8 years','Metal fabrication and welding professional'),
-(15,'Spencer Meyer','0848901234',NULL,'https://tercia2005.github.io/certificates/spencermeyercertificate-page-001.jpg','https://media.istockphoto.com/id/466825606/photo/repairman-with-notes.jpg?s=2048x2048&w=is&k=20&c=cpzQQAodr8bgJzXZFFSat7QSICjAvoznMPg-LlukNRs=',190.00,'9 years','Project supervision and site management');
-
+-- Insert client_details (updated: add client_id = 21)
 INSERT INTO `client_details` (`user_id`, `fullname`, `phone_number`, `address`) VALUES
 (16, 'Thando Mokoena', '0821112233', '45 Rose Avenue, Johannesburg, Gauteng'),
 (17, 'Lerato Khumalo', '0832223344', '12 Maple Street, Pretoria, Gauteng'),
 (18, 'Michael Maseko', '0843334455', '89 Pine Road, Durban, KwaZulu-Natal'),
 (19, 'Karabo Sekati', '0824445566', '77 Birch Lane, Bloemfontein, Free State'),
-(20, 'Peter Madonsela', '0835556677', '101 Acacia Drive, Cape Town, Western Cape');
+(20, 'Peter Madonsela', '0835556677', '101 Acacia Drive, Cape Town, Western Cape'),
+(21, 'Test Client', '0826667788', '123 Test Street, Cape Town, Western Cape');
 
-INSERT INTO `job_request` 
-(`client_id`, `contractor_id`, `service_type`, `description`, `location`, `job_date`, `status`, `amount`, `hours_to_work`)
-VALUES
-(16, 1, 'Plumbing', 'Fix leaking kitchen sink', '45 Rose Avenue, Johannesburg', '2025-08-20', 'pending', 250.00, 3),
-(17, 2, 'Electrical', 'Install new light fixtures in living room', '12 Maple Street, Pretoria', '2025-08-22', 'accepted', 300.00, 4),
-(18, 3, 'Carpentry', 'Build custom bookshelf for study', '89 Pine Road, Durban', '2025-08-25', 'in_progress', 450.50, 2),
-(19, 5, 'Construction', 'Extend patio and add roof covering', '77 Birch Lane, Bloemfontein', '2025-09-01', 'completed', 1200.00, 8),
-(20, 7, 'Roofing', 'Repair damaged roof tiles after storm', '101 Acacia Drive, Cape Town', '2025-08-28', 'pending', 800.00, 6),
-(16, 9, 'Tiling', 'Install ceramic tiles in bathroom', '45 Rose Avenue, Johannesburg', '2025-08-24', 'accepted', 600.00, 5),
-(18, 12, 'HVAC', 'Air conditioner installation in office', '89 Pine Road, Durban', '2025-09-05', 'pending', 950.00, 4.30),
-(17, 14, 'Metalwork', 'Fabricate custom gate for driveway', '12 Maple Street, Pretoria', '2025-08-30', 'in_progress', 700.00, 5),
-(19, 8, 'Landscaping', 'Design and plant front garden', '77 Birch Lane, Bloemfontein', '2025-09-02', 'pending', 500.00, 3.30),
-(20, 15, 'Project Management', 'Oversee warehouse renovation', '101 Acacia Drive, Cape Town', '2025-09-10', 'pending', 1500.00, 5.30);
+-- Insert contractor_details (unchanged)
+INSERT INTO `contractor_details` 
+(`user_id`,`full_name`,`phone_number`,`address`,`certification_pdf`,`card_photo`,`hourly_rate`,`job_experience`,`description`) VALUES
+(1,'Steven Jacobs','0823456789','123 Avenue Street',X'','https://i.pinimg.com/736x/c1/9e/8c/c19e8c264bdb02463f66c04e3bf97204.jpg',145.45,'5 years','Skilled in Plumbing and electrical shooks'),
+(2,'Njabulo Mthethwa','0834567890','10 Walworth Road',X'','https://i.pinimg.com/1200x/95/6e/dd/956eddba046af9e7ecd3c37c1bd6d5a6.jpg',120.00,'3 years','Skilled in electrical repairs and maintenance'),
+(3,'James Petersen','0845678901','11 Goodwood Street',X'','https://i.pinimg.com/736x/1f/e7/33/1fe7331a7ea022bc0cfe5fea3ee32069.jpg',180.75,'7 years','Professional in carpentry and custom furniture'),
+(4,'Samanther Daniels','0829876543','Lake 10 Busher',X'','https://i.pinimg.com/1200x/93/57/6d/93576dafd0a094ad8d2a2858bef7fb90.jpg',145.25,'4 years','Interior design and renovation specialist'),
+(5,'Frank van der Merwe','0832345678','234 Civic Center',X'','https://i.pinimg.com/1200x/5e/7b/40/5e7b40297cadbedeff54a01c25e1d6c3.jpg',200.00,'10 years','Construction project manager and builder'),
+(6,'Nicole Botha','0848765432','890 Khayelitsha',X'','https://i.pinimg.com/736x/e7/26/f0/e726f0300d266a7a5c4fdd6eafab6f11.jpg',135.50,'2 years','Painting and decorative finishes expert'),
+(7,'Matthew Khumalo','0827654321','123 Parklands Main North',X'','https://i.pinimg.com/736x/9d/db/4e/9ddb4e4003af284f07adf708d19783fd.jpg',175.00,'6 years','Roofing and waterproofing professional'),
+(8,'Travis Williams','0836789012','56 Fourth Avenue Street',X'','https://i.pinimg.com/736x/86/58/97/8658971eff508d3e91bb619a8218c0d2.jpg',160.25,'5 years','Landscaping and garden maintenance'),
+(9,'David Naidoo','0843456789','9 Lincoln street',X'','https://i.pinimg.com/1200x/6e/63/93/6e639309715d15098a071c3c1476621d.jpg',140.00,'3 years','Tile installation and flooring specialist'),
+(10,'Rose Smith','0821234567','89 Long Street',X'','https://i.pinimg.com/736x/ec/ad/a1/ecada111c76e1e6d22c0d4fbbd85462f.jpg',155.75,'4 years','Event setup and decoration expert'),
+(11,'Senzo Dlamini','0839123456','5th Blaubergside road',X'','https://media.istockphoto.com/id/183836345/photo/african-american-construction-foreman.jpg?s=2048x2048&w=is&k=20&c=lz64Dgxu9j66dnk8Pxm6h4pcI7jdNN6Gz8k0xFNCy2c=',130.00,'2 years','Basic plumbing and handyman services'),
+(12,'Joshua Adams','0846543210','Revenue Built',X'','https://media.istockphoto.com/id/487254119/photo/builder-with-trowel-isolated-on-white-background.jpg?s=2048x2048&w=is&k=20&c=fe0r8EEh18yczlHbxP4Kss7kEIwvgk-uSlRB2ZpGlsc=',165.50,'6 years','HVAC installation and repair technician'),
+(13,'Jabulani Zulu','0825678901','Hazel Street 4th',X'','https://media.istockphoto.com/id/1157056523/photo/african-american-engineer-with-safety-glasses-and-safety-helmet-reaching-out-to-shake-hands.jpg?s=2048x2048&w=is&k=20&c=xb7Bf_XePPqZM6xn6_duMtypGlE1mcjWJ9jB3r9Ez0c=',150.00,'5 years','Bricklaying and masonry expert'),
+(14,'Simon Nkosi','0837890123','7 Dunoon',X'','https://media.istockphoto.com/id/670472332/photo/studio-shot-of-young-happy-persian-man-construction-worker-smiling.jpg?s=2048x2048&w=is&k=20&c=XUWOhmAANEOk2WDQ5NjYktjhdTpJU717yHKkFEIhcO4=',170.25,'8 years','Metal fabrication and welding professional'),
+(15,'Spencer Meyer','0848901234','Mfuleni, Zwezwe street',X'','https://media.istockphoto.com/id/466825606/photo/repairman-with-notes.jpg?s=2048x2048&w=is&k=20&c=cpzQQAodr8bgJzXZFFSat7QSICjAvoznMPg-LlukNRs=',190.00,'9 years','Project supervision and site management');
 
--- passwords 
--- admin1@proconnect.com -> Admin@123
--- admin1@proconnect.com -> Admin@456
--- Insert admin_details for them
-INSERT INTO `admin_details` (`user_id`, `address`, `email`) VALUES
-((SELECT user_id FROM users WHERE email = 'admin1@proconnect.com'), '100 Admin Street, Johannesburg, Gauteng', 'admin1@proconnect.com'),
-((SELECT user_id FROM users WHERE email = 'admin2@proconnect.com'), '200 Admin Avenue, Cape Town, Western Cape', 'admin2@proconnect.com');
+-- Insert job_request (updated: use DECIMAL for amount)
+LOCK TABLES `job_request` WRITE;
+INSERT INTO `job_request` VALUES 
+(1,16,1,'Plumbing','Fix leaking kitchen sink','45 Rose Avenue, Johannesburg','2025-08-20','pending',406.00,3,'PAID','2025-08-18'),
+(2,17,2,'Electrical','Install new light fixtures in living room','12 Maple Street, Pretoria','2025-08-22','pending',300.00,4,'PAID','2025-08-20'),
+(3,18,3,'Carpentry','Build custom bookshelf for study','89 Pine Road, Durban','2025-08-25','request',451.00,2,'PAID','2025-08-24'),
+(4,19,5,'Construction','Extend patio and add roof covering','77 Birch Lane, Bloemfontein','2025-09-01','pending',1200.00,8,'PAID','2025-09-01'),
+(7,18,12,'HVAC','Air conditioner installation in office','89 Pine Road, Durban','2025-09-05','request',950.00,4,'PAID','2025-09-03'),
+(8,17,14,'Metalwork','Fabricate custom gate for driveway','12 Maple Street, Pretoria','2025-08-30','request',700.00,5,'PAID','2025-08-28'),
+(9,19,8,'Landscaping','Design and plant front garden','77 Birch Lane, Bloemfontein','2025-09-02','pending',500.00,3,'PAID','2025-09-01'),
+(10,20,15,'Project Management','Oversee warehouse renovation','101 Acacia Drive, Cape Town','2025-09-10','pending',1500.00,5,'PAID','2025-09-08');
+UNLOCK TABLES;
 
--- Fix trigger so it matches admin_details column names
+-- Trigger (unchanged)
 DROP TRIGGER IF EXISTS after_user_insert;
 DELIMITER $$
 CREATE TRIGGER after_user_insert
@@ -219,7 +206,6 @@ BEGIN
     END IF;
 END$$
 DELIMITER ;
-
 
 -- Re-enable foreign key checks
 SET FOREIGN_KEY_CHECKS = 1;

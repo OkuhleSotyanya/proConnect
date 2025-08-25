@@ -1,4 +1,3 @@
-// controllers/authController.js
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const pool = require('../config/db');
@@ -21,14 +20,14 @@ const authController = {
       }
 
       const token = jwt.sign(
-        { user_id: user.user_id, email: user.email, role_id: user.role_id },
+        { user_id: user.user_id, email: user.email, role_id: user.role_id, user_role: user.role_name },
         process.env.JWT_SECRET,
         { expiresIn: '1h' }
       );
 
       res.json({
         token,
-        user: { user_id: user.user_id, email: user.email, role_id: user.role_id },
+        user: { user_id: user.user_id, email: user.email, role_id: user.role_id,user: user.role_name },
       });
     } catch (error) {
       console.error('Login error:', error);
@@ -50,7 +49,16 @@ const authController = {
       const roleId = 2; // Client
       const userId = await User.createUser(email, hashedPassword, roleId);
 
-      await User.createClientDetails(userId, fullname, phone_number, address);
+      // Update or insert client details to avoid duplicates
+      await pool.query(
+        `INSERT INTO client_details (user_id, fullname, phone_number, address)
+         VALUES (?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           fullname = VALUES(fullname),
+           phone_number = VALUES(phone_number),
+           address = VALUES(address)`,
+        [userId, fullname || 'Unknown', phone_number || '', address || '']
+      );
 
       const token = jwt.sign(
         { user_id: userId, email, role_id: roleId },
@@ -117,8 +125,16 @@ const authController = {
   // Register Admin
   async registerAdmin(req, res) {
     try {
-      if (!req.user || req.user.role_id !== 1) {
-        return res.status(403).json({ message: 'Only admins can register new admins' });
+      // Check if any admin already exists
+      const [admins] = await pool.query(
+        'SELECT user_id FROM users WHERE role_id = 1 LIMIT 1'
+      );
+
+      // If at least one admin exists, require current user to be an admin
+      if (admins.length > 0) {
+        if (!req.user || req.user.role_id !== 1) {
+          return res.status(403).json({ message: 'Only admins can register new admins' });
+        }
       }
 
       const { email, password, address } = req.body;
@@ -140,7 +156,10 @@ const authController = {
         { expiresIn: '1h' }
       );
 
-      res.status(201).json({ token, user: { user_id: userId, email, role_id: roleId } });
+      res.status(201).json({
+        token,
+        user: { user_id: userId, email, role_id: roleId }
+      });
     } catch (error) {
       console.error('Admin registration error:', error);
       res.status(500).json({ message: 'Server error' });
@@ -156,16 +175,55 @@ const authController = {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      let details = null;
+      let details = [];
       if (user.role_id === 1) {
         [details] = await pool.query('SELECT * FROM admin_details WHERE user_id = ?', [userId]);
       } else if (user.role_id === 2) {
-        [details] = await pool.query('SELECT * FROM client_details WHERE user_id = ?', [userId]);
+        // Select record with non-null fields preferentially
+        [details] = await pool.query(
+          `SELECT * FROM client_details 
+           WHERE user_id = ? 
+           ORDER BY 
+             (fullname IS NOT NULL AND fullname != '') DESC,
+             (phone_number IS NOT NULL AND phone_number != '') DESC,
+             (address IS NOT NULL AND address != '') DESC
+           LIMIT 1`,
+          [userId]
+        );
+        // Create default record if none exists
+        if (!details.length) {
+          await pool.query(
+            'INSERT INTO client_details (user_id, fullname, phone_number, address) VALUES (?, ?, ?, ?)',
+            [userId, 'Unknown', '', '']
+          );
+          [details] = await pool.query('SELECT * FROM client_details WHERE user_id = ?', [userId]);
+        }
       } else if (user.role_id === 3) {
-        [details] = await pool.query('SELECT * FROM contractor_details WHERE user_id = ?', [userId]);
+        // Select most complete contractor record
+        [details] = await pool.query(
+          `SELECT * FROM contractor_details 
+           WHERE user_id = ? 
+           ORDER BY 
+             (full_name IS NOT NULL AND full_name != '') DESC,
+             (phone_number IS NOT NULL AND phone_number != '') DESC,
+             (address IS NOT NULL AND address != '') DESC
+           LIMIT 1`,
+          [userId]
+        );
+        // Create default record if none exists
+        if (!details.length) {
+          await pool.query(
+            `INSERT INTO contractor_details 
+             (user_id, full_name, phone_number, address, certification_pdf, card_photo, hourly_rate, job_experience, description) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [userId, 'Unknown', '', '', '', '', '0.00', '', '']
+          );
+          [details] = await pool.query('SELECT * FROM contractor_details WHERE user_id = ?', [userId]);
+        }
       }
 
-      res.json({ user, details: details[0] });
+      console.log('Profile fetched - User:', user, 'Details:', details);
+      res.json({ user, details: details[0] || {} });
     } catch (error) {
       console.error('Get user profile error:', error);
       res.status(500).json({ message: 'Server error' });
@@ -176,18 +234,23 @@ const authController = {
   async updateUserProfile(req, res) {
     try {
       const userId = req.user.user_id;
+
+      // Use req.body for text fields
       const {
         email,
         password,
         full_name,
+        fullname,
         phone_number,
         address,
-        certification_pdf,
-        card_photo,
         hourly_rate,
         job_experience,
         description,
       } = req.body;
+
+      // Use req.files for uploaded files
+      const card_photo = req.files?.card_photo?.[0]?.filename;
+      const certification_pdf = req.files?.certification_pdf?.[0]?.filename;
 
       // Update users table
       const userFields = {};
@@ -203,17 +266,17 @@ const authController = {
       if (user.role_id === 1) {
         await User.updateAdminDetails(userId, { address });
       } else if (user.role_id === 2) {
-        await User.updateClientDetails(userId, { full_name, phone_number, address });
+        await User.updateClientDetails(userId, { fullname, phone_number, address });
       } else if (user.role_id === 3) {
         await User.updateContractorDetails(userId, {
           full_name,
           phone_number,
           address,
-          certification_pdf,
-          card_photo,
           hourly_rate,
           job_experience,
           description,
+          card_photo,
+          certification_pdf,
         });
       }
 

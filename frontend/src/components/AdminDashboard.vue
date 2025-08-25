@@ -1,36 +1,61 @@
 <template>
-  <div class="dashboard">
-    
+  <div class="dashboard-page">
+  
 
-    <!-- Content -->
-    <section class="dashboard-content">
-      <!-- Overview Cards -->
-      <div v-if="activePage === 'overview'">
-        <h2>Overview</h2>
+    <!-- Main Content Area -->
+    <main class="dashboard-content">
+      <div v-if="activePage === 'overview'" class="content-section">
+        <h2 class="section-heading">Overview</h2>
         <div class="card-container">
           <div class="card">
             <h3>Total Clients</h3>
-            <p>{{ clients.length }}</p>
+            <p>{{ totalClients }}</p>
           </div>
           <div class="card">
             <h3>Total Contractors</h3>
-            <p>{{ contractors.length }}</p>
+            <p>{{ totalContractors }}</p>
           </div>
           <div class="card">
             <h3>Active Jobs</h3>
-            <p>{{ jobs.filter(job => job.status === 'active').length }}</p>
+            <p>{{ activeJobs }}</p>
           </div>
           <div class="card">
             <h3>Completed Jobs</h3>
-            <p>{{ jobs.filter(job => job.status === 'completed').length }}</p>
+            <p>{{ completedJobs }}</p>
           </div>
           <div class="card">
             <h3>Total Revenue</h3>
-            <p>R{{ totalRevenue }}</p>
+            <p>R{{ totalRevenue.toLocaleString() }}</p>
           </div>
         </div>
       </div>
-    </section>
+
+      <!-- Conditional Content Rendering -->
+      <div v-if="activePage === 'adminclients'" class="content-section">
+        <h2 class="section-heading">Client Management</h2>
+        <AdminClients />
+      </div>
+      <div v-if="activePage === 'admincontractors'" class="content-section">
+        <h2 class="section-heading">Contractor Management</h2>
+        <AdminContractors />
+      </div>
+      <div v-if="activePage === 'jobmanagement'" class="content-section">
+        <h2 class="section-heading">Job Management</h2>
+        <JobManagement />
+      </div>
+      <div v-if="activePage === 'recentransactions'" class="content-section">
+        <h2 class="section-heading">Recent Payments</h2>
+        <AdminPayments />
+      </div>
+      <div v-if="activePage === 'refunds'" class="content-section">
+        <h2 class="section-heading">Refund Requests</h2>
+        <Refunds /> 
+      </div>
+      <div v-if="activePage === 'adminprofile'" class="content-section">
+        <h2 class="section-heading">Admin Profile</h2>
+        <AdminProfile />
+      </div>
+    </main>
   </div>
 </template>
 
@@ -39,8 +64,9 @@ import AdminNav from './AdminNav.vue';
 import AdminClients from './AdminClients.vue';
 import JobManagement from './JobManagement.vue';
 import AdminProfile from './AdminProfile.vue';
-import RecentTransactions from './AdminPayments.vue';
 import AdminContractors from './AdminContractors.vue';
+import Refunds from './AdminRefunds.vue';
+import AdminPayments from './AdminPayments.vue';
 
 export default {
   name: 'AdminDashboard',
@@ -49,151 +75,152 @@ export default {
     AdminClients,
     JobManagement,
     AdminProfile,
-    RecentTransactions,
-    AdminContractors
+    AdminPayments,
+    AdminContractors,
+    Refunds
   },
   data() {
     return {
       activePage: 'overview',
-      clients: [],
-      contractors: [],
-      jobs: [],
-      totalRevenue: 0
+      totalClients: 153,
+      totalContractors: 85,
+      activeJobs: 42,
+      completedJobs: 215,
+      totalRevenue: 850300
     };
   },
   methods: {
     setActive(page) {
       this.activePage = page;
     }
-  },
-  mounted() {
-    // Mock data
-    this.clients = [
-      { id: 1, name: "John Doe", email: "john@example.com" },
-      { id: 2, name: "Jane Smith", email: "jane@example.com" }
-    ];
-
-    this.contractors = [
-      { id: 1, name: "Mike Johnson", specialty: "Plumbing" },
-      { id: 2, name: "Sara Lee", specialty: "Electrical" }
-    ];
-
-    this.jobs = [
-      { id: 1, title: "Fix sink", status: "active", price: 500 },
-      { id: 2, title: "Install lights", status: "completed", price: 800 },
-      { id: 3, title: "Repair AC", status: "active", price: 650 }
-    ];
-
-    this.totalRevenue = this.jobs.reduce((sum, job) => sum + job.price, 0);
   }
 };
 </script>
 
 <style scoped>
-.dashboard {
-  font-family: Arial, sans-serif;
+.dashboard-page {
+  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f8fafc, #eef2f7);
   padding: 20px;
+  color: #2c3e50;
 }
 
-.dashboard-header {
-  background: #222;
-  color: white;
-  padding: 10px;
-  border-radius: 5px;
-}
-
-.dashboard-nav {
-  margin: 15px 0;
-}
-
-.dashboard-nav button {
-  background: #444;
-  color: white;
-  padding: 8px 12px;
-  margin-right: 5px;
-  border: none;
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.dashboard-nav button:hover {
-  background: #666;
-}
-
+/* Content Layout */
 .dashboard-content {
-  background: #f4f4f4;
-  padding: 15px;
-  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
 }
 
-/* Cards for overview */
+/* Section Styling */
+.content-section {
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+  padding: 30px;
+  animation: fadeIn 0.4s ease;
+}
+
+.section-heading {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 25px;
+  position: relative;
+}
+
+.section-heading::after {
+  content: '';
+  display: block;
+  width: 70px;
+  height: 4px;
+  background: linear-gradient(90deg, #3498db, #2ecc71);
+  border-radius: 2px;
+  margin-top: 8px;
+}
+
+/* Card Container for Overview */
 .card-container {
-  display: flex;
-  gap: 15px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 25px;
 }
 
 .card {
-  background: white;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
-  flex: 1 1 calc(25% - 15px);
+  background: #fff;
+  border-radius: 12px;
+  padding: 25px;
   text-align: center;
-  min-width: 150px;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+  cursor: pointer;
 }
 
 .card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.2);
+  transform: translateY(-6px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
 }
 
 .card h3 {
-  margin-bottom: 8px;
-  font-size: 1.1em;
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .card p {
-  font-size: 1.4em;
-  font-weight: bold;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2c3e50;
+  margin: 0;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
+/* Give revenue card a highlight */
+.card:nth-child(5) {
+  background: linear-gradient(135deg, #2ecc71, #27ae60);
+  color: #fff;
 }
 
-th, td {
-  padding: 8px;
-  border: 1px solid #ccc;
+.card:nth-child(5) h3 {
+  color: #eafaf1;
+  opacity: 0.9;
 }
 
-th {
-  background: #ddd;
+.card:nth-child(5) p {
+  color: #fff;
 }
 
-.payment-tables {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
+/* Fade In Animation */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.payment-tables table {
-  background: white;
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .dashboard-page {
+    padding: 15px;
+  }
+
+  .section-heading {
+    font-size: 1.5rem;
+    text-align: center;
+  }
+
+  .card-container {
+    gap: 15px;
+  }
+
+  .card {
+    padding: 20px;
+  }
+
+  .card p {
+    font-size: 1.6rem;
+  }
 }
 
-.signout-btn {
-  background: crimson;
-  color: white;
-  padding: 8px 14px;
-  border: none;
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.signout-btn:hover {
-  background: darkred;
-}
 </style>

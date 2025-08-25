@@ -9,7 +9,6 @@
         <router-link to="/admin/clients">Clients</router-link>
         <router-link to="/admin/contractors">Contractors</router-link>
         <router-link to="/admin/jobs">Jobs</router-link>
-        <router-link to="/admin/payments">Payments</router-link>
         <router-link to="/admin/profile">Profile</router-link>
       </div>
     </nav>

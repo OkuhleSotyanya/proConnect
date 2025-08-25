@@ -5,7 +5,7 @@
     <div class="profile-info">
       <img :src="profileImage" alt="Profile Picture" class="profile-picture" />
       <div>
-        <p><strong>Email:</strong> admin@example.co.za</p>
+        <p><strong>Email:</strong> admin1@proconnect.co.za</p>
         <p><strong>Role:</strong> Administrator</p>
         <p><strong>Name:</strong> Admin User</p>
       </div>

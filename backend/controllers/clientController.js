@@ -1,8 +1,9 @@
+// controllers/clientController.js
 const bcrypt = require('bcrypt');
 const ClientModel = require('../models/clientModel');
 
 const ClientController = {
-    // All clients
+    // Admin functions to manage all clients
     async getAllClients(req, res) {
         try {
             const clients = await ClientModel.getAll();
@@ -17,7 +18,9 @@ const ClientController = {
         try {
             const { id } = req.params;
             const client = await ClientModel.getById(id);
-            if (!client) return res.status(404).json({ message: 'Client not found' });
+            if (!client) {
+                return res.status(404).json({ message: 'Client not found' });
+            }
             res.status(200).json(client);
         } catch (error) {
             console.error('Error fetching client:', error);
@@ -28,7 +31,9 @@ const ClientController = {
     async createClient(req, res) {
         try {
             const { email, password, fullname, phone_number, address } = req.body;
-            if (!email || !password || !fullname) return res.status(400).json({ message: 'Required fields missing' });
+            if (!email || !password || !fullname) {
+                return res.status(400).json({ message: 'Required fields missing' });
+            }
 
             const passwordHash = await bcrypt.hash(password, 12);
             const newClient = await ClientModel.create(email, passwordHash, fullname, phone_number, address);
@@ -44,7 +49,9 @@ const ClientController = {
             const { id } = req.params;
             const { fullname, phone_number, address } = req.body;
             const affectedRows = await ClientModel.update(id, fullname, phone_number, address);
-            if (affectedRows === 0) return res.status(404).json({ message: 'Client not found or no changes made' });
+            if (affectedRows === 0) {
+                return res.status(404).json({ message: 'Client not found or no changes made' });
+            }
             res.status(200).json({ message: 'Client updated successfully' });
         } catch (error) {
             console.error('Error updating client:', error);
@@ -56,7 +63,9 @@ const ClientController = {
         try {
             const { id } = req.params;
             const affectedRows = await ClientModel.delete(id);
-            if (affectedRows === 0) return res.status(404).json({ message: 'Client not found' });
+            if (affectedRows === 0) {
+                return res.status(404).json({ message: 'Client not found' });
+            }
             res.status(200).json({ message: 'Client deleted successfully' });
         } catch (error) {
             console.error('Error deleting client:', error);
@@ -64,15 +73,17 @@ const ClientController = {
         }
     },
 
-    // Logged-in client profile
+    // Logged-in client's own profile management
     async getMyProfile(req, res) {
         try {
             const userId = req.user.user_id;
             const client = await ClientModel.getById(userId);
-            if (!client) return res.status(404).json({ message: 'Client not found' });
+            if (!client) {
+                return res.status(404).json({ message: 'Client profile not found' });
+            }
             res.status(200).json(client);
         } catch (err) {
-            console.error(err);
+            console.error('Error fetching client profile:', err);
             res.status(500).json({ message: 'Failed to fetch client profile' });
         }
     },
@@ -82,13 +93,16 @@ const ClientController = {
             const userId = req.user.user_id;
             const { fullname, email, phone_number, address } = req.body;
 
-            if (email) await ClientModel.updateEmail(userId, email);
+            // Only update if fields are provided
+            if (email) {
+                await ClientModel.updateEmail(userId, email);
+            }
             await ClientModel.update(userId, fullname, phone_number, address);
 
             const updatedClient = await ClientModel.getById(userId);
             res.status(200).json(updatedClient);
         } catch (err) {
-            console.error(err);
+            console.error('Error updating client profile:', err);
             res.status(500).json({ message: 'Failed to update client profile' });
         }
     },

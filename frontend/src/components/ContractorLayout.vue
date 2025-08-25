@@ -1,13 +1,14 @@
 <template>
-  <div id="client-layout">
+  <div id="contractor-layout">
     <!-- Client Navigation Bar -->
-    <nav class="client-nav">
+    <nav class="contractor-nav">
       <div class="logo">ProConnect</div>
       <div class="nav-links">
-        <router-link to="/client/home">Home</router-link>
-        <router-link to="/client/services">Services</router-link>
-        <router-link to="/client/MyJobs">My Jobs</router-link>
-        <router-link to="/client/profile">Profile</router-link>
+        <router-link to="/contractor/home">Dashboard</router-link>
+        <router-link to="/contractor/jobs">Available Jobs</router-link>
+        <router-link to="/contractor/pending">Pending Jobs</router-link>
+        <router-link to="/contractor/completed">Completed Jobs</router-link>
+        <router-link to="/contractor/profile">Profile</router-link>
         <button v-if="isAuthenticated" @click="logout" class="logout-btn">
           Logout
         </button>
@@ -28,34 +29,35 @@
 
 <script>
 export default {
-  name: 'ClientLayout',
+  name: 'ContractorLayout',
   data() {
     return {
       isAuthenticated: false,
     };
   },
-  created() {
-    // Example check: you can adapt this to your auth logic
-    this.isAuthenticated = !!localStorage.getItem('token');
+ methods: {
+  logout() {
+    this.$store.dispatch('logout');
+    this.isAuthenticated = false;
+    this.$router.push('/login');
   },
-  methods: {
-    logout() {
-      localStorage.removeItem('token');
-      this.isAuthenticated = false;
-      this.$router.push('/login');
-    },
-  },
+},
+created() {
+  this.isAuthenticated = !!localStorage.getItem('token');
+  if (this.isAuthenticated) this.$store.dispatch('restoreSession');
+},
+
 };
 </script>
 
 <style scoped>
-#client-layout {
+#contractor-layout {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
 }
 
-.client-nav {
+.contractor-nav {
   background-color: #3498db;
   padding: 10px 20px;
   display: flex;

@@ -1,4 +1,3 @@
-// models/authModel.js
 const pool = require('../config/db');
 
 const User = {
@@ -11,14 +10,18 @@ const User = {
   },
 
   async findByEmail(email) {
-    const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+    const [rows] = await pool.query('SELECT * FROM users u inner join roles r on u.role_id = r.role_id WHERE email = ?', [email]);
     return rows[0];
   },
 
   async createClientDetails(userId, fullname, phone_number, address) {
     const [result] = await pool.query(
       `INSERT INTO client_details (user_id, fullname, phone_number, address) 
-       VALUES (?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         fullname = VALUES(fullname),
+         phone_number = VALUES(phone_number),
+         address = VALUES(address)`,
       [userId, fullname, phone_number, address]
     );
     return result.insertId;
@@ -38,7 +41,16 @@ const User = {
     const [result] = await pool.query(
       `INSERT INTO contractor_details 
        (user_id, full_name, phone_number, address, certification_pdf, card_photo, hourly_rate, job_experience, description) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         full_name = VALUES(full_name),
+         phone_number = VALUES(phone_number),
+         address = VALUES(address),
+         certification_pdf = VALUES(certification_pdf),
+         card_photo = VALUES(card_photo),
+         hourly_rate = VALUES(hourly_rate),
+         job_experience = VALUES(job_experience),
+         description = VALUES(description)`,
       [userId, full_name, phone_number, address, certification_pdf, card_photo, hourly_rate, job_experience, description]
     );
     return result.insertId;
@@ -46,7 +58,9 @@ const User = {
 
   async createAdminDetails(userId, address) {
     const [result] = await pool.query(
-      `INSERT INTO admin_details (user_id, address) VALUES (?, ?)`,
+      `INSERT INTO admin_details (user_id, address) VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE
+         address = VALUES(address)`,
       [userId, address]
     );
     return result.insertId;
@@ -94,7 +108,7 @@ const User = {
     const updates = [];
     const values = [];
 
-    if (fields.full_name) updates.push('full_name = ?'), values.push(fields.full_name);
+    if (fields.fullname) updates.push('fullname = ?'), values.push(fields.fullname);
     if (fields.phone_number) updates.push('phone_number = ?'), values.push(fields.phone_number);
     if (fields.address) updates.push('address = ?'), values.push(fields.address);
 

@@ -3,11 +3,16 @@ import LoginView from '../views/LoginView.vue';
 import SignupView from '../views/SignupView.vue';
 import ClientLayout from '@/components/ClientLayout.vue';
 import AdminLayout from '@/components/AdminLayout.vue';
+import TermsView from '../views/terms.vue';
+import PrivacyView from '../views/privacy.vue';
+import ReturnsView from '../views/return.vue';
+import ContractorLayout from '@/components/ContractorLayout.vue';
+
 
 
 const routes = [
   {
-    path: '/',
+    path: '/login',
     name: 'Login',
     component: LoginView
   },
@@ -16,6 +21,11 @@ const routes = [
     name: 'Signup',
     component: SignupView
   },
+
+   // Public pages
+  { path: '/terms', name: 'Terms', component: TermsView },
+  { path: '/privacy', name: 'Privacy', component: PrivacyView },
+  { path: '/returns', name: 'Returns', component: ReturnsView },
 
   // Admin routes
   {
@@ -27,26 +37,41 @@ const routes = [
       { path: 'contractors', name: 'AdminContractors', component: () => import('@/components/AdminContractors.vue') },
       { path: 'profile', name: 'AdminProfile', component: () => import('@/components/AdminProfile.vue') },
       { path: 'payments', name: 'AdminPayments', component: () => import('@/components/AdminPayments.vue') },
-      { path: 'jobs', name: 'JobManagement', component: () => import('@/components/JobManagement.vue') }
-      
+      { path: 'jobs', name: 'JobManagement', component: () => import('@/components/JobManagement.vue') },
+      {path: 'refunds', name: 'AdminRefunds', component: () => import('@/components/AdminRefunds.vue') }
     ]
   },
 
-    // Client routes
+  // Client routes
   {
     path: '/client',
     component: ClientLayout,
     children: [
-      // This is the key change: use the new ClientHome.vue component
       { path: 'home', name: 'ClientHome', component: () => import('@/components/ClientHome.vue') },
       { path: 'services', name: 'ClientServices', component: () => import('@/components/ClientServices.vue') },
-      { path: 'profile', name: 'ClientsProfile', component: () => import('@/components/ClientsProfile.vue') }
-      
+      { path: 'profile', name: 'ClientProfile', component: () => import('@/components/ClientsProfile.vue') },
+      { path: 'MyJobs', name: 'ClientJobs', component: () => import('@/components/ClientsJobs.vue') }
     ]
   },
- 
-  // Default redirect
-  { path: '/', redirect: '/client/home' }
+
+  {
+    path: '/contractor',
+    component: ContractorLayout,
+    children: [
+      {path: 'home', name: 'dashboard', component: () => import('@/views/contractorsDashboard.vue') },
+      {path: 'jobs', name: 'jobs',component: () => import('@/views/contractorsJobs.vue')  },
+      {path: 'profile', name: 'profile',component: () => import('@/views/contractorsProfile.vue')  },
+      {path: 'pending', name: 'pending',component: () => import('@/views/contractorsPending.vue')  },
+      {path: 'completed', name: 'completed',component: () => import('@/views/contractorsCompleted.vue')  }
+    ]
+  },
+
+  
+  // Redirect root to login
+  { path: '/', redirect: '/login' },
+
+  // Catch-all
+  { path: '/:catchAll(.*)', redirect: '/login' }
 ];
 
 const router = createRouter({

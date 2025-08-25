@@ -1,9 +1,15 @@
+// models/clientModel.js
 const pool = require('../config/db');
 
 const ClientModel = {
     async getAll() {
         const [rows] = await pool.query(`
-            SELECT u.user_id, u.email, cd.fullname, cd.phone_number, cd.address
+            SELECT 
+                u.user_id, 
+                u.email, 
+                cd.fullname, 
+                cd.phone_number, 
+                cd.address
             FROM users u
             JOIN client_details cd ON u.user_id = cd.user_id
             WHERE u.role_id = 2
@@ -13,7 +19,12 @@ const ClientModel = {
 
     async getById(userId) {
         const [rows] = await pool.query(`
-            SELECT u.user_id, u.email, cd.fullname, cd.phone_number, cd.address
+            SELECT 
+                u.user_id, 
+                u.email, 
+                cd.fullname, 
+                cd.phone_number, 
+                cd.address
             FROM users u
             JOIN client_details cd ON u.user_id = cd.user_id
             WHERE u.role_id = 2 AND u.user_id = ?
